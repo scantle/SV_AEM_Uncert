@@ -1,0 +1,7 @@
+type,package,k,i,j,value,desc
+Error,model,0,0,0,0.000000,No solver package
+Error,DIS,1,61,10,0.946777,thin cells (less than checker threshold of 1.0)
+Error,DIS,1,96,20,0.106934,thin cells (less than checker threshold of 1.0)
+Error,DIS,1,276,127,0.875488,thin cells (less than checker threshold of 1.0)
+Error,DIS,1,328,146,0.033264,thin cells (less than checker threshold of 1.0)
+Error,DIS,1,341,147,0.229309,thin cells (less than checker threshold of 1.0)
