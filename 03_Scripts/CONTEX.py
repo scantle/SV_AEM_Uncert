@@ -14,7 +14,7 @@ from pathlib import Path
 
 # Input Files
 in_dir = Path('./04_InputFiles/CONTEX/')
-scale_factor_file = in_dir / 'scale_factors.dat'
+pp_factor_file = in_dir / 'pp_factors.dat'
 
 # MODFLOW Model
 mf_dir = Path('./02_Models/SVIHM_MF/')
@@ -96,34 +96,65 @@ def model_to_grid_df(mf, xoff=0.0, yoff=0.0, remove_inactive=True):
 # Read in MODFLOW model discretization
 gwf = fp.modflow.Modflow.load((model_name + '.nam'), version='mfnwt', load_only=['dis','bas6'], model_ws=mf_dir)
 
-# Read in log distribution pilot points
-scale_pp = pd.read_csv(in_dir / 'pilot_point_scales.csv')
-scale_pp['name'] = 'pp' + scale_pp.index.astype(str)
-scale_pp.loc[scale_pp.Layer==1,'name'] = scale_pp.loc[scale_pp.Layer==0,'name'].values
-scale_pp['zone'] = 0
-scale_pp = scale_pp.rename({'X':'x', 'Y':'y'}, axis=1)
-scale_pp_flat = scale_pp[scale_pp['Layer']==0]
+#----------------------------------------------------------------------------------------------------------------------#
+# Pilot Point Kriging
+#----------------------------------------------------------------------------------------------------------------------#
+
+# Read in log distribution/nugget pilot points & values
+pp = pd.read_csv(in_dir / 'pilot_point_values.csv')
+pp['name'] = 'pp' + pp.index.astype(str)
+pp.loc[pp.Layer==1,'name'] = pp.loc[pp.Layer==0,'name'].values
+pp['zone'] = 0
+pp = pp.rename({'X':'x', 'Y':'y'}, axis=1)
+pp_flat = pp[pp['Layer']==0]
 
 # Get Kriging weights ("factors") for each point
 grid_df = model_to_grid_df(gwf, xoff, yoff, remove_inactive=False)
 grid_layer1_df = grid_df[grid_df['layer']==0]
-scale_ok = pyemu.utils.geostats.OrdinaryKrige(scale_gs, scale_pp_flat)
-if scale_factor_file.exists():
-    print('Using existing factor file:', scale_factor_file)
+pp_ok = pyemu.utils.geostats.OrdinaryKrige(scale_gs, pp_flat)
+if pp_factor_file.exists():
+    print('Using existing factor file:', pp_factor_file)
 else:
-    scale_weights = scale_ok.calc_factors(grid_layer1_df['X'], grid_layer1_df['Y'], maxpts_interp=12)
-    scale_ok.to_grid_factors_file(scale_factor_file, ncol=grid_layer1_df.shape[0])
-    print('Cached scale factors to', scale_factor_file)
+    pp_weight = pp_ok.calc_factors(grid_layer1_df['X'], grid_layer1_df['Y'], maxpts_interp=12)
+    pp_ok.to_grid_factors_file(pp_factor_file, ncol=grid_layer1_df.shape[0])
+    print('Cached pilot point factors to', pp_factor_file)
 
-# Loop over layers, textures getting our final values
+# Loop over layers, (textures, nuggets) getting our final values
 for k in range(0,gwf.nlay):
+    # Textures
     for tex in tqdm(tex_dists.index):
         # write pp file
-        this_pp = scale_pp[scale_pp['Layer']==k][['name','zone','x','y',tex]]
+        this_pp = pp[pp['Layer']==k][['name','zone','x','y',tex]]
         this_pp = this_pp.rename({tex:'parval1'}, axis=1)
         pyemu.utils.pp_utils.write_pp_file(in_dir / f"scale_pp_{tex}.dat", this_pp)
         # Apply factors
         grid_df.loc[grid_df['layer']==k, tex] = (
             pyemu.utils.geostats.fac2real(pp_file=str(in_dir / f"scale_pp_{tex}.dat"),
-                                      factors_file=str(scale_factor_file),
+                                      factors_file=str(pp_factor_file),
                                       out_file=None))[0]
+    # Nuggets
+    for nug in tqdm(['lth_nugget', 'aem_nugget']):
+        # write pp file
+        this_pp = pp[pp['Layer']==k][['name','zone','x','y',nug]]
+        this_pp = this_pp.rename({nug:'parval1'}, axis=1)
+        pyemu.utils.pp_utils.write_pp_file(in_dir / f"pp_{nug}.dat", this_pp)
+        # Apply factors
+        grid_df.loc[grid_df['layer']==k, nug] = (
+            pyemu.utils.geostats.fac2real(pp_file=str(in_dir / f"pp_{nug}.dat"),
+                                      factors_file=str(pp_factor_file),
+                                      out_file=None))[0]
+
+#----------------------------------------------------------------------------------------------------------------------#
+# Lithology Conversion
+#----------------------------------------------------------------------------------------------------------------------#
+
+# Read in lithology logs
+litho = pd.read_csv(in_dir / 'lithologs.csv')
+
+# Get resistivity values
+litho['rho'] = np.nan
+for idx, row in tqdm(litho.iterrows(), 'Interval', litho.shape[0]):
+    # Get log dist mode for cell: loc + scale * np.exp(-shape**2)
+    tex = row['tex']
+    scale = grid_df.loc[(grid_df.row == row.row) & (grid_df.col == row.col) & (grid_df.layer == row.layer),tex].values[0]
+    litho.loc[idx,'rho'] = tex_dists.loc[tex,'Location'] + scale * np.exp(-tex_dists.loc[tex,'Shape']**2)
