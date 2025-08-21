@@ -1,11 +1,15 @@
+import matplotlib
+matplotlib.use('TkAgg')
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import geopandas as gpd
 import flopy as fp
+import json
 import pyemu
 from pathlib import Path
 from tqdm import tqdm
-from scipy.spatial.distance import pdist
+from scipy.stats import lognorm
 from sklearn.neighbors import NearestNeighbors
 
 # Local
@@ -18,9 +22,10 @@ from aem_read import read_xyz, aem_wide2long
 #----------------------------------------------------------------------------------------------------------------------#
 
 # Directories
-out_dir = Path('./04_InputFiles/CONTEX/')
+out_dir = Path('./04_InputFiles/RES2PAR/')
 data_dir = Path ('./01_Data/')
 shp_dir = data_dir / 'GIS/'
+plt_dir = Path('./05_Plots/')
 
 # Files
 litho_file = data_dir / 'AEM_WELL_LITHOLOGY_csv_WO2_20220710_CVHM.csv'
@@ -42,6 +47,9 @@ yoff = 4571330
 # T2P-like Settings
 min_log_length = 5  # meters
 use_model_gse = True
+
+# Cluster colors
+cc = ['#df263e', '#e37e26', '#e3c128', '#6da14d', '#5289db']
 
 #----------------------------------------------------------------------------------------------------------------------#
 # Functions/Classes
@@ -136,13 +144,61 @@ layers = gwf.nlay
 
 #----------------------------------------------------------------------------------------------------------------------#
 
+#-- Redo lognormal distributions from Scantlebury & Harter (202X) with no loc parameter
+
+# Read in texture-resistivity boostrap analysis from the previous project
+with open(data_dir / 'rho_dict.json', 'r') as f:
+    rho_dict = json.load(f)
+
+# Convert keys to int and values to np.array
+rho_dict = {int(k): np.array(v) for k, v in rho_dict.items()}
+
+cluster_names = ['1 - Fine-grained', '2 - Mixed Fine', '3 - Sand', '4 - Mixed Coarse', '5 - Very Coarse']
+tex_names = [name.split('-')[1].strip().replace(' ', '_') for name in cluster_names]
+
+plt.style.use('seaborn-v0_8-colorblind')
+hplt, hax = plt.subplots(figsize=(12, 8))
+fit_dists = {}
+hax.grid(which='both', linestyle='-', linewidth='0.5', color='lightgrey')
+hist_patches = []
+
+for tex in rho_dict.keys():
+    bins = np.logspace(np.log10(np.min(rho_dict[tex])), np.log10(np.max(rho_dict[tex])), num=40)
+    ptch = hax.hist(rho_dict[tex], bins=bins, alpha=0.5, density=True, zorder=2, label=cluster_names[tex], color=cc[tex])
+    hist_patches.extend(ptch[2])
+    shape, loc, scale = lognorm.fit(rho_dict[tex], floc=0)
+    x = np.linspace(0, 500, 1000)
+    y = lognorm.pdf(x, s=shape, loc=loc, scale=scale)
+    plt.plot(x, y, zorder=2, color=cc[tex], lw=2)
+    fit_dists[tex] = (shape, loc, scale)
+    print(tex, shape, loc, scale)
+hax.set_xscale('log')
+medians = [round(np.median(rho_dict[tex])) for tex in rho_dict.keys()]
+newticks = [10,20,50,100,150,200,300,400]
+plt.xticks(newticks, [f'{t}' for t in newticks])
+hax.set_xlim(10,500)
+
+hax.set_xlabel(r'Resistivity (log scale), $\rho\, [\Omega\cdot\mathrm{m}]$', fontsize=15)
+hax.set_ylabel('Density', fontsize=15)
+leg = hax.legend(fontsize=13, title='Texture Clusters', title_fontsize=15)
+hplt.tight_layout()
+plt.savefig(plt_dir / '01_histogram_resistivity_clusters.png', dpi=300, bbox_inches='tight')
+
+with open(out_dir / 'lognorm_dist_clustered.par', 'w') as f:
+    f.write(f"{len(fit_dists.keys())}    # Number of texture classes\n")
+    f.write(f"{'Texture':>15}{'Shape':>12}{'Location':>12}{'Scale':>12}\n")
+    for tex in fit_dists.keys():
+        f.write(f"{tex_names[tex]:15}{fit_dists[tex][0]:12.6f}{fit_dists[tex][1]:12.6f}{fit_dists[tex][2]:12.6f}\n")
+
+#----------------------------------------------------------------------------------------------------------------------#
+
 #-- Setup initial pilot point file
 
 # Read model outline
 ppshp = gpd.read_file(shp_dir / 't2p_pilot_points.shp')
 
-# Read in initial shape parameters
-lognorm_values = pd.read_table('./01_Data/lognorm_dist_clustered.par', sep='\\s+', skiprows=1)
+# Re-read in file
+lognorm_values = pd.read_table(out_dir / 'lognorm_dist_clustered.par', sep='\\s+', skiprows=1)
 
 # Assemble into pilot point dataframe
 
@@ -170,7 +226,7 @@ pp_layers = pd.concat(
 out_cols = ['X', 'Y', 'Layer'] + list(lognorm_values.Texture) + con_pp_cols
 pp_layers[out_cols].to_csv(out_dir / 'pilot_point_values.csv', index=False)
 
-print(f"Wrote {len(pp_layers)} pilot points × {lognorm_values.shape[0]} textures to pilot_point_scales.csv")
+print(f"Wrote {len(pp_layers)} pilot points × {lognorm_values.shape[0]} textures to pilot_point_values.csv")
 
 #----------------------------------------------------------------------------------------------------------------------#
 # Pilot point distance average, to inform kriging
