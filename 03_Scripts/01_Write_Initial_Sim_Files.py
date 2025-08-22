@@ -270,18 +270,22 @@ litho = litho.merge(litho_shp[['WELL_INFO_ID','x','y','row','col']], on='WELL_IN
 litho['tex'] = litho.apply(reclassify_texture, axis=1)
 litho = litho[litho['tex']!='unknown']
 
-# Enforce log minimum thickness
-litho = enforce_min_interval(litho, min_log_length)
+# # Enforce log minimum thickness
+# litho = enforce_min_interval(litho, min_log_length)
 
 # Determine layer each interval is within
+litho['midpoint_m'] = 0.5 * (litho['LITH_TOP_DEPTH_m'] + litho['LITH_BOT_DEPTH_m'])
 if use_model_gse:
     litho['z'] = gwf.dis.gettop()[litho['row'].values, litho['col'].values] - litho['midpoint_m']
 else:
     litho['z'] = litho['GROUND_SURFACE_ELEVATION_m'] - litho['midpoint_m']
 litho['layer'] = gwf.dis.get_layer(litho['row'], litho['col'], litho['z'])
 
+# Rename some cols
+litho = litho.rename({'LITH_TOP_DEPTH_m': 'TOP_DEPTH_m', 'LITH_BOT_DEPTH_m': 'BOT_DEPTH_m'}, axis=1)
+
 # Write out litho_df file
-out_cols = ['WELL_INFO_ID','x','y','z','row','col','layer','tex']
+out_cols = ['WELL_INFO_ID','row','col','layer','x','y','GROUND_SURFACE_ELEVATION_m','TOP_DEPTH_m','BOT_DEPTH_m','tex']
 litho[out_cols].to_csv(out_dir / 'lithologs.csv', index=False)
 
 #----------------------------------------------------------------------------------------------------------------------#
@@ -317,20 +321,24 @@ aem_long = aem_long.loc[(aem_long['DEP_TOP'] < aem_long['DOI_CONSERVATIVE'])]
 # Drop any NA Rho values
 aem_long = aem_long.loc[~aem_long['RHO_I'].isna()]
 
-# Enforce log minimum thickness
-aem_long = enforce_min_interval(aem_long, min_log_length, top_col='DEP_TOP', bot_col='DEP_BOT')
-
+# # Enforce log minimum thickness
+# aem_long = enforce_min_interval(aem_long, min_log_length, top_col='DEP_TOP', bot_col='DEP_BOT')
+#
 # Determine layer each interval is within
 aem_long['row'] = aem_long['row'].astype(int).values
 aem_long['col'] = aem_long['col'].astype(int).values
+aem_long['midpoint_m'] = 0.5 * (aem_long['DEP_TOP'] + aem_long['DEP_BOT'])
 if use_model_gse:
     aem_long['z'] = gwf.dis.gettop()[aem_long['row'].values, aem_long['col'].values] - aem_long['midpoint_m']
 else:
-    aem_long['z'] = aem_long['GROUND_SURFACE_ELEVATION_m'] - aem_long['midpoint_m']
+    aem_long['z'] = aem_long['ELEVATION'] - aem_long['midpoint_m']
 aem_long['layer'] = gwf.dis.get_layer(aem_long['row'], aem_long['col'], aem_long['z'])
 
+# Rename some cols
+aem_long = aem_long.rename({'DEP_TOP': 'TOP_DEPTH_m', 'DEP_BOT': 'BOT_DEPTH_m', 'ELEVATION':'GROUND_SURFACE_ELEVATION_m'}, axis=1)
+
 # Write out litho_df file
-out_cols = ['LINE_NO','FID','x','y','z','row','col','layer','RHO_I','RHO_I_STD']
+out_cols = ['LINE_NO','FID','row','col','layer','x','y','GROUND_SURFACE_ELEVATION_m','TOP_DEPTH_m','BOT_DEPTH_m','RHO_I','RHO_I_STD']
 aem_long[out_cols].to_csv(out_dir / 'aemlogs.csv', index=False)
 
 #----------------------------------------------------------------------------------------------------------------------#
