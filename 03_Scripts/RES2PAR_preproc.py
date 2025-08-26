@@ -13,8 +13,6 @@ from pathlib import Path
 from scipy.stats import lognorm
 import t2py
 
-import geopandas as gpd
-
 #----------------------------------------------------------------------------------------------------------------------#
 # Settings
 #----------------------------------------------------------------------------------------------------------------------#
@@ -23,7 +21,6 @@ import geopandas as gpd
 in_dir = Path('./04_InputFiles/RES2PAR/')
 pp_factor_file = in_dir / 'pp_factors.dat'
 tex_dist_file = in_dir / 'lognorm_dist_clustered.par'
-sv_model_shp_file = Path('./01_Data/GIS/') / 'grid_properties_rep.shp'
 out_dir = Path('./06_Outputs/')
 
 # MODFLOW Model
@@ -36,7 +33,12 @@ yoff = 4571330
 scale_vario   = pyemu.geostats.SphVario(contribution=1.0, a=2317*3)
 scale_gs  = pyemu.geostats.GeoStruct(variograms=[scale_vario])
 
-seed = 667
+# Res2Par related settings
+max_outside_dist = 500
+tailings_issue_logs = [18416, 18424, 18223, 18528, 18339]
+
+# Textures
+texs = ['Fine', 'Mixed_Fine','Sand', 'Mixed_Coarse', 'Very_Coarse']
 
 #----------------------------------------------------------------------------------------------------------------------#
 # Functions/Classes
@@ -228,6 +230,20 @@ for k in range(0,gwf.nlay):
             pyemu.utils.geostats.fac2real(pp_file=str(in_dir / f"pp_{nug}.dat"),
                                       factors_file=str(pp_factor_file),
                                       out_file=None))[0]
+
+# For RES2Par, add in (uniform) shape parameters
+shp_cols = []
+for tex in tex_dists.keys():
+    grid_df[tex + '_shp'] = tex_dists[tex][0]
+    shp_cols.append(tex + '_shp')
+
+# Write file for RES2PAR
+use_cols = ['layer'] + texs + shp_cols
+grid_df_out = grid_df[use_cols].copy()
+grid_df_out['node'] = grid_df_out.index + 1  # 1-index for R2P
+grid_df_out['node'] = grid_df_out['node'] - grid_df_out['layer']*gwf.nrow*gwf.ncol
+grid_df_out['layer'] = grid_df_out['layer'] + 1  # 1-index for R2P
+grid_df_out[['node']+use_cols].to_csv(out_dir / 'interp_tex_dists.csv', index=False)
 
 #----------------------------------------------------------------------------------------------------------------------#
 # Lithology Conversion

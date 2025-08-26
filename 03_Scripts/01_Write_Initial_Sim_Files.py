@@ -35,6 +35,7 @@ aem_sharp_file = data_dir / 'SCI_Sharp_10_West_I01_MOD_inv.xyz'
 aem_hqwells_file = shp_dir / 'aem_sv_HQ_LithologyWells_UTM10N.shp'
 aem_lqwells_file = shp_dir / 'aem_sv_LQ_LithologyWells_UTM10N.shp'
 aem_sharp_sv_file = shp_dir / 'aem_sv_Sharp_I01_MOD_inv_UTM10N.shp'
+sv_model_domain_file = shp_dir / 'Model_Domain_20180222.shp'
 
 out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -47,6 +48,8 @@ yoff = 4571330
 # T2P-like Settings
 min_log_length = 5  # meters
 use_model_gse = True
+svihm_buffer = 500
+tailings_issue_logs = [18416, 18424, 18223, 18528, 18339]
 
 # Cluster colors
 cc = ['#df263e', '#e37e26', '#e3c128', '#6da14d', '#5289db']
@@ -254,6 +257,14 @@ aem_lqwells_shp.set_index('WELLINFOID', inplace=True)
 # Combine well shapefiles
 litho_shp = pd.concat([aem_lqwells_shp, aem_hqwells_shp])
 
+# Remove locations outside 500m buffer
+svihm_domain = gpd.read_file(sv_model_domain_file)
+buffer_shp = svihm_domain.buffer(svihm_buffer)
+litho_shp = litho_shp[litho_shp.within(buffer_shp.union_all())]
+
+# Remove associated texture data
+litho = litho[litho.WELL_INFO_ID.isin(litho_shp.index)]
+
 # Locate in GW model, limit to logs within GW domain (including inactive cells)
 litho_shp['x'], litho_shp['y'] = (litho_shp.geometry.x, litho_shp.geometry.y)
 litho_shp['row'], litho_shp['col'] = (np.nan, np.nan)
@@ -269,6 +280,10 @@ litho = litho.merge(litho_shp[['WELL_INFO_ID','x','y','row','col']], on='WELL_IN
 # Apply texture reclassification, drop unknowns
 litho['tex'] = litho.apply(reclassify_texture, axis=1)
 litho = litho[litho['tex']!='unknown']
+
+# Adjust some tailings logs that are skewing the south tailings area "fine"
+# We know this area to actually be very, very coarse
+litho.loc[litho.WELL_INFO_ID.isin(tailings_issue_logs), 'tex'] = 'Very_Coarse'
 
 # # Enforce log minimum thickness
 # litho = enforce_min_interval(litho, min_log_length)
@@ -302,6 +317,12 @@ aem_shp['y'] = aem_shp.geometry.y
 aem_shp['row'], aem_shp['col'] = (np.nan, np.nan)
 for row, values in tqdm(aem_shp.iterrows()):
     aem_shp.loc[row, ['row','col']] = gwf.modelgrid.intersect(values.x, values.y, forgive=True)
+
+# Remove locations outside 500m buffer
+svihm_domain = gpd.read_file(sv_model_domain_file)
+buffer_shp = svihm_domain.buffer(svihm_buffer)
+# Limit to SV buffer (points inside the domain or buffer)
+aem_shp = aem_shp[aem_shp.within(buffer_shp.union_all())]
 
 # Subset to Scott Valley, add various shp columns to wide
 aem_wide = aem_wide[aem_wide['LINE_NO'].isin(aem_shp['LINE_NO'])]
