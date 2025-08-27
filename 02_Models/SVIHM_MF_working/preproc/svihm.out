@@ -1,0 +1,82 @@
+   _________   _______  ________
+--|\___   ___\/  ___  \|\   __  \ ----
+   \|___ \  \_/__/|_/  /\ \  \|\  \
+------- \ \  \|__|//  / /\ \   ____\----
+         \ \  \   /  /_/__\ \  \___|
+--------- \ \__\ |\________\ \__\ --------
+           \|__|  \|_______|\|__|
+ 
+           Texture2Par v_res2par-alpha.1
+----------------------------------------------
+Copyright S.S. Papadopulos & Associates Inc.
+ 
+Started at: 2025-08-26 16:47:25
+Reading Input Files
+Opening file svihm.t2p for reading.
+Opening file res_log.csv for reading.
+ 
+Elapsed time:  3 seconds.
+ 
+--- INPUT SUMMARY ---
+ Total Data Classes:                          5
+ Texture Data Classes:                        5
+ Covariate Data Classes:                      0
+ Number of Dataset Files:                     1
+ Number of HSUs:                              1
+ Number of Variograms:                        2
+ Number of Model Cells (All Layers)      184800
+ Number of Model Layers                       2
+ Number of Pilot Point Zones                  1
+ Number of Aquifer Pilot Points               1
+ Max Variogram Structures:                    1
+ No Data Value:                         -999.00
+ IDW Power Value:                          2.00
+ Max Secondary Data Dist:                  0.00
+ Max Outside Bounds Dist:                500.00
+ Max Log Interval Length:              1.80+308
+ Interpolation Dimensions:                    3
+ Interpolation Method:                 Ordinary Kriging (OK) - Block Kriging Active
+ Interpolation Order:                  BEFORE
+ Logical Options Set to TRUE:          WRITE_VARIANCE,WRITE_NODE_FILES,WRITE_DATASET_FILES,USE_MODEL_GSE,ANISOTROPIC_SEARCH,NO_TEX_BOUNDS,KVME,
+ 
+-- INTERPOLATION SETUP: (no covariates)
+             1. FINE
+             2. MIXED_FINE
+             3. SAND
+             4. MIXED_COARSE
+             5. VERY_COARSE
+ 
+-- CLASS VARIOGRAMS --                  struct type  nugget    sill    min_range    max_range   vert_range  azimuth      dip     roll
+ * Vario  1: HSU= 1 Class Pair=( 1, 1) -     1  SPH  0.0000  0.5650   6.8000E+03   6.8000E+03   6.0000E+01     0.00  0.00  0.00
+ 
+-- PILOT POINT VARIOGRAM --             struct type  nugget    sill    min_range    max_range  azimuth
+ * Vario  1: HSU= 1 Class Pair=( 1, 1) -     1  SPH  0.0000  1.0000   1.0000E+05   1.0000E+05     0.00
+ 
+--- AQUIFER PILOT POINTS ---
+   ID  Class             X            Y  Zone         Kmin         Kmax           Ss           Sy        Aniso           Kd          KHp          KVp          STp
+    1      1     511983.00   4599271.00     1   2.4076E-01   0.0000E+00   2.2449E-04   2.3610E-02   1.1041E+01   7.0000E-03   9.3530E-01  -6.2059E-01   1.0000E+00
+    1      2     511983.00   4599271.00     1   6.4030E+00   0.0000E+00   1.7091E-04   2.9929E-02   9.7487E+00   7.0000E-03   9.3530E-01  -6.2059E-01   1.0000E+00
+    1      3     511983.00   4599271.00     1   3.3778E+01   0.0000E+00   9.7555E-05   2.4993E-01   8.9664E+00   7.0000E-03   9.3530E-01  -6.2059E-01   1.0000E+00
+    1      4     511983.00   4599271.00     1   3.3778E+01   0.0000E+00   4.4977E-05   2.0002E-01   8.2400E+00   7.0000E-03   9.3530E-01  -6.2059E-01   1.0000E+00
+    1      5     511983.00   4599271.00     1   3.3778E+01   0.0000E+00   2.0586E-05   3.8621E-02   3.2785E+00   7.0000E-03   9.3530E-01  -6.2059E-01   1.0000E+00
+
+Interpolating Pilot Point Parameters to MODFLOW Grid
+  - Array:            1
+Opening file INTERP_TEX_DISTS.CSV for reading.
+Interpolating Datasets to MODFLOW Grid
+  - Layer:            1
+  - Layer:            2
+Calculating Hydraulic Parameters
+  - Layer:            1
+  - Layer:            2
+Calculations finished!
+Writing output files
+  Writing Parameter Node Files
+  Writing Class Node Files
+  Writing MODFLOW Input Files
+Opening file SVIHM_TEMPLATE.upw for reading.
+Opening file c:\Users\lelan\Documents\CodeProjects\PhD_SV_AEM_Uncert\02_Models\SVIHM_MF_working\MODFLOW\SVIHM.upw for writing.
+  Done Writing.
+ 
+Elapsed time:  6 minutes, 32 seconds.
+Texture2Par Normal Termination
