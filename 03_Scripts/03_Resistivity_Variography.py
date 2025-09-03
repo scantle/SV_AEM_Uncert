@@ -4,16 +4,18 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
-import pyemu
 import gstools as gs
+from gstools.covmodel import SumModel
 from pathlib import Path
+from math import radians, pi
 
 #----------------------------------------------------------------------------------------------------------------------#
 # Settings
 #----------------------------------------------------------------------------------------------------------------------#
 
 # Input Files
-in_dir = Path('./04_InputFiles/CONTEX/')
+in_dir = Path('./04_InputFiles/RES2PAR/')
+plt_dir = Path('./05_Plots')
 
 # MODFLOW Model
 mf_dir = Path('./02_Models/SVIHM_MF/')
@@ -59,17 +61,17 @@ def rose_of_pair_directions(xs, ys, n_pairs=200000, bin_deg=10, seed=42):
     dx = xs[j] - xs[i]
     dy = ys[j] - ys[i]
 
-    # 3) azimuth clockwise from North (math: arctan2(dx, dy))
-    az_rad = np.arctan2(dx, dy)                 # radians, −π‥+π
-    az_deg = np.mod(np.degrees(az_rad), 360.0)  # 0‥360°
+    # 3) azimuth clockwise from North
+    az_rad = np.arctan2(dx, dy)
+    az_deg = np.mod(np.degrees(az_rad), 360.0)
 
     # 4) histogram
     bins = np.arange(0, 360 + bin_deg, bin_deg)
     counts, _ = np.histogram(az_deg, bins=bins)
 
     # 5) polar bar plot
-    theta = np.deg2rad(bins[:-1] + bin_deg / 2)   # bin centres in rad
-    width = np.deg2rad(bin_deg)                  # bar width
+    theta = np.deg2rad(bins[:-1] + bin_deg / 2)
+    width = np.deg2rad(bin_deg)
 
     fig = plt.figure(figsize=(6, 6))
     ax = fig.add_subplot(111, polar=True)
@@ -80,6 +82,37 @@ def rose_of_pair_directions(xs, ys, n_pairs=200000, bin_deg=10, seed=42):
     ax.set_theta_direction(-1)
     ax.set_title(f"Pair-direction rose ({n_pairs:,} pairs, {bin_deg}° bins)")
     plt.show()
+
+#----------------------------------------------------------------------------------------------------------------------#
+
+def fit_dir_variogram(bc, gamma, kind="sph", nugget=True):
+    kind = kind.lower()
+    if kind.startswith("sph"):
+        m = gs.Spherical(dim=1)
+    elif kind.startswith("exp"):
+        m = gs.Exponential(dim=1)
+    elif kind.startswith("gau"):
+        m = gs.Gaussian(dim=1)
+    else:
+        raise ValueError("kind must be sph/exp/gau")
+    m.fit_variogram(bc, gamma, nugget=nugget)
+    return m
+
+#----------------------------------------------------------------------------------------------------------------------#
+
+def dir_vario(xs, ys, zs, vals, az_deg, bin_edges, tol_deg=15, samp=30000, seed=0):
+    bc, g, n = gs.vario_estimate(
+        (xs, ys, zs), vals,
+        bin_edges=bin_edges,
+        direction=[azimuth_to_vector(az_deg)],
+        angles_tol=np.deg2rad(tol_deg),
+        sampling_size=samp,
+        sampling_seed=seed,
+        return_counts=True,
+    )
+    g = g[0] if g.ndim > 1 else g
+    n = n[0] if n.ndim > 1 else n
+    return bc, g, n
 
 #----------------------------------------------------------------------------------------------------------------------#
 # Main
@@ -104,22 +137,23 @@ xs     = resdf['x'].to_numpy()
 ys     = resdf['y'].to_numpy()
 zs     = resdf['z'].to_numpy()
 vals   = resdf['logrho'].to_numpy()
-xy_max = 20000
-z_max  = 600
-bin_h = np.linspace(0, xy_max / 2, 60)
+xy_max = 4000
+z_max  = 300
+bin_h = np.linspace(0, xy_max / 2, 20)
 bin_v = np.linspace(0, z_max  / 2, 20)
 
 #----------------------------------------------------------------------------------------------------------------------#
 # Try out different principal directions
+#----------------------------------------------------------------------------------------------------------------------#
 
 rose_of_pair_directions(resdf['x'].to_numpy(),
                         resdf['y'].to_numpy(),
-                        n_pairs = 1000000,
+                        n_pairs = 100000,
                         bin_deg = 5)
 
-azimuths = np.arange(-35, 35, 5)
+azimuths = np.arange(-45, 46, 5)
 n = len(azimuths)
-ncols = 4
+ncols = 5
 nrows = int(np.ceil(n / ncols))
 fig, axes = plt.subplots(nrows, ncols, figsize=(4 * ncols, 3 * nrows), squeeze=False)
 
@@ -136,7 +170,7 @@ for idx, az in tqdm(enumerate(azimuths), 'Azimuth', len(azimuths)):
         sampling_seed = 0,
         return_counts = False
     )
-    # gamma may come back 2D if multiple directions; take first row
+
     exp_gamma = gamma[0] if gamma.ndim > 1 else gamma
 
     # Fit an Exponential model (1D fit)
@@ -160,36 +194,43 @@ plt.tight_layout()
 plt.show()
 
 #----------------------------------------------------------------------------------------------------------------------#
+# Empirical variograms for E–W, N–S, Vertical
+#----------------------------------------------------------------------------------------------------------------------#
 # Directional variograms
-major_angle = - 10
+major_angle = 0
 minor_angle = major_angle + 90
 
-bc_h, gamma_EW = gs.vario_estimate(
+bc_EW, gamma_EW = gs.vario_estimate(
     (xs, ys, zs), vals,
     bin_edges     = bin_h,
-    direction     = [azimuth_to_vector(minor_angle)],  # E–W
+    direction     = [azimuth_to_vector(minor_angle)],
+    angles_tol=np.deg2rad(15),
     sampling_size = 25000,
     sampling_seed = 0,
 )
-bc_h,  gamma_NS = gs.vario_estimate(
+
+bc_NS,  gamma_NS = gs.vario_estimate(
     (xs, ys, zs), vals,
     bin_edges     = bin_h,
     direction     = [azimuth_to_vector(major_angle)],  # N–S
+    angles_tol=np.deg2rad(15),
     sampling_size = 25000,
     sampling_seed = 0,
 )
+
 bc_z, gamma_V = gs.vario_estimate(
     (xs, ys, zs), vals,
     bin_edges     = bin_v,
     direction     = [np.array([0,0,1])],  # vertical
     sampling_size = 25000,
+    angles_tol=np.deg2rad(15),
     sampling_seed = 0,
 )
 
 # Fit variograms
-m_EW = gs.Exponential(dim=1); m_EW.fit_variogram(bc_h, gamma_EW, nugget=False)
-m_NS = gs.Exponential(dim=1); m_NS.fit_variogram(bc_h, gamma_NS, nugget=False)
-m_V  = gs.Exponential(dim=1); m_V.fit_variogram(bc_z, gamma_V, nugget=False)
+m_EW = gs.Spherical(dim=1); m_EW.fit_variogram(bc_EW, gamma_EW, nugget=True)
+m_NS = gs.Spherical(dim=1); m_NS.fit_variogram(bc_NS, gamma_NS, nugget=True)
+m_V  = gs.Spherical(dim=1); m_V.fit_variogram(bc_z, gamma_V, nugget=True)
 
 print("E–W:", m_EW)
 print("N–S:", m_NS)
@@ -198,11 +239,11 @@ print("Vert:", m_V)
 maj_mod =  m_NS  # For SV, major scale along NS
 rot_z = np.pi/2 - np.deg2rad(major_angle)
 
-anis_model = gs.Exponential(
+anis_model = gs.Spherical(
     dim       = 3,
     var       = maj_mod.var,              # sill from major axis
-    len_scale = [m_EW.len_scale,          # x-range
-                 m_NS.len_scale,          # y-range
+    len_scale = [m_NS.len_scale,          # x-range
+                 m_EW.len_scale,          # y-range
                  m_V.len_scale],          # z-range
     nugget    = maj_mod.nugget,           # nugget from major axis
     angles    = [rot_z, 0.0, 0.0],           # Tait–Bryan angles
@@ -218,102 +259,29 @@ axes_dirs = {
 fig, (ax_xy, ax_z) = plt.subplots(2, 1, figsize=(8, 10), sharex=False)
 
 # 1) Horizontal variograms (E–W & N–S) on ax_xy
-ax_xy.scatter(bc_h, gamma_EW, label="E–W (exp.)", marker="o")
-ax_xy.scatter(bc_h, gamma_NS, label="N–S (exp.)", marker="^")
+ax_xy.scatter(bc_EW, gamma_EW, label=f"{minor_angle}° Experimental", marker="o")
+ax_xy.scatter(bc_NS, gamma_NS, label=f"{major_angle}° Experimental", marker="^")
 
 # fitted directional curves for axes 0 and 1
-anis_model.plot("vario_axis", axis=0, ax=ax_xy, x_max=bc_h.max(), label="E–W fit")
-anis_model.plot("vario_axis", axis=1, ax=ax_xy, x_max=bc_h.max(), label="N–S fit")
-m_EW.plot("vario_axis", axis=0, ax=ax_xy, x_max=bc_h.max(), label="E-W only fit")
+m_EW.plot("vario_axis", axis=0, ax=ax_xy, x_max=bc_EW.max(), label=f"{minor_angle}° only fit")
+anis_model.plot("vario_axis", axis=1, ax=ax_xy, x_max=bc_NS.max(), label=f"{major_angle}° fit")
+anis_model.plot("vario_axis", axis=0, ax=ax_xy, x_max=bc_EW.max(), label=f"{minor_angle}° fit")
 ax_xy.set(title="Horizontal Variograms", ylabel="Semivariance")
 ax_xy.legend(loc="best")
 
 # 2) Vertical variogram on ax_z
-ax_z.scatter(bc_z, gamma_V, label="Vertical (exp.)", marker="s")
+ax_z.scatter(bc_z, gamma_V, label="Vertical", marker="s")
 
 # fitted directional curve for axis 2
-anis_model.plot("vario_axis", axis=2, ax=ax_z, x_max=bc_z.max(), label="Vertical fit")
 m_V.plot("vario_axis", axis=0, ax=ax_z, x_max=bc_z.max(), label="Vertical only fit")
+anis_model.plot("vario_axis", axis=2, ax=ax_z, x_max=bc_z.max(), label="Vertical fit")
 
 ax_z.set(title="Vertical Variogram", xlabel="Lag Distance", ylabel="Semivariance")
 ax_z.legend(loc="best")
 
 plt.tight_layout()
 plt.show()
+plt.savefig(plt_dir / f'{major_angle}_degree_major_variogram.png', dpi=300)
 
 #----------------------------------------------------------------------------------------------------------------------#
-
-# 1) Omnidirectional (XY) variogram
-bc_xy, gamma_xy = gs.vario_estimate(
-    (xs, ys),       # drop zs for a pure horizontal variogram
-    vals,
-    bin_edges     = bin_h,
-    mesh_type     = "unstructured",
-    sampling_size = 1000,
-    sampling_seed = 45,
-    return_counts = False
-)
-
-# 2) Vertical variogram (Z-direction)
-bc_z, gamma_V = gs.vario_estimate(
-    (xs, ys, zs),          # full coords, but direction locks it vertical
-    vals,
-    bin_edges     = bin_v,
-    direction     = [np.array([0.0, 0.0, 1.0])],
-    mesh_type     = "unstructured",
-    sampling_size = 10000,
-    sampling_seed = 45,
-    return_counts = False
-)
-
-# --- Fit 1D models ---------------------------------------------------------
-
-# XY isotropic model (2D)
-m_xy = gs.Spherical(dim=2)
-m_xy.fit_variogram(bc_xy, gamma_xy, nugget=True)
-
-# Z directional model (1D)
-m_V = gs.Spherical(dim=1)
-m_V.fit_variogram(bc_z,  gamma_V,   nugget=False)
-
-print("XY isotropic:", m_xy)
-print("Vertical:   ", m_V)
-
-# --- Build a 3D anisotropic model with isotropic XY -----------------------
-
-xy_range = m_xy.len_scale
-z_range  = m_V.len_scale
-
-anis_model = gs.Spherical(
-    dim       = 3,
-    var       = m_xy.var,              # sill from XY fit
-    len_scale = xy_range,              # primary horizontal range
-    anis      = [1.0, z_range/xy_range],  # [ratio_YtoX=1, ZtoX]
-    angles    = [0.0, 0.0, 0.0],        # no rotation in XY, no dip
-    nugget    = m_xy.nugget            # nugget from XY fit
-)
-
-print("Anisotropic 3D:", anis_model)
-
-# --- Plot the two variograms ----------------------------------------------
-
-fig, (ax_xy, ax_z) = plt.subplots(2, 1, figsize=(8, 8), sharex=False)
-
-# XY isotropic
-ax_xy.scatter(bc_xy, gamma_xy, label="XY (exp.)", marker="o")
-m_xy.plot("variogram", ax=ax_xy, x_max=bc_xy.max(), label="XY fit")
-ax_xy.set(title="Omnidirectional (XY) Variogram",
-          ylabel="Semivariance")
-ax_xy.legend(loc="best")
-
-# Vertical
-ax_z.scatter(bc_z, gamma_V, label="Z (exp.)", marker="s")
-# use the 1D vertical model to align nugget correctly
-m_V.plot("variogram", ax=ax_z, x_max=bc_z.max(), label="Z fit")
-ax_z.set(title="Vertical Variogram",
-         xlabel="Lag Distance",
-         ylabel="Semivariance")
-ax_z.legend(loc="best")
-
-plt.tight_layout()
-plt.show()
+s
