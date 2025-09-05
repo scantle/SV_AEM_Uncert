@@ -53,10 +53,5 @@ DATA 402 Streamflow_SVID_Div_SVIHM.dat
 DATA 403 Streamflow_BY_SVIHM.dat
 DATA 404 Streamflow_AS_SVIHM.dat
 DATA 405 Streamflow_LS_SVIHM.dat
-DATA 406 Streamflow_BigSlough_SVIHM.dat
-DATA 407 Streamflow_Pred_Loc_2.dat
-DATA 408 Streamflow_Pred_Loc_3.dat
-DATA 409 Streamflow_Pred_Loc_4.dat
-DATA 410 Streamflow_Pred_Loc_5.dat
 DATA 500 HobData_SVIHM.dat
 Data 501 Reduced_Wells.dat

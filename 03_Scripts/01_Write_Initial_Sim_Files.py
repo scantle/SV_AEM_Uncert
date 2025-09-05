@@ -195,54 +195,6 @@ with open(out_dir / 'lognorm_dist_clustered.par', 'w') as f:
 
 #----------------------------------------------------------------------------------------------------------------------#
 
-#-- Setup initial pilot point file
-
-# Read model outline
-ppshp = gpd.read_file(shp_dir / 't2p_pilot_points.shp')
-
-# Re-read in file
-lognorm_values = pd.read_table(out_dir / 'lognorm_dist_clustered.par', sep='\\s+', skiprows=1)
-
-# Assemble into pilot point dataframe
-
-# Extract X, Y
-ppshp['X'] = ppshp.geometry.x
-ppshp['Y'] = ppshp.geometry.y
-
-# Add in conceptual pp nugget values
-con_pp_cols = ['lth_nugget', 'aem_nugget']
-for col in con_pp_cols:
-    ppshp[col] = 0.0
-
-for i,row in lognorm_values.iterrows():
-    ppshp[row.Texture] = row.Scale
-
-# Add a layer column for each layer
-npp = ppshp.shape[0]
-ppshp['Layer'] = 0
-pp_layers = pd.concat(
-    [ppshp.assign(Layer=lyr) for lyr in range(layers)],
-    ignore_index=True
-)
-
-# Pick out the columns you need and write CSV
-out_cols = ['X', 'Y', 'Layer'] + list(lognorm_values.Texture) + con_pp_cols
-pp_layers[out_cols].to_csv(out_dir / 'pilot_point_values.csv', index=False)
-
-print(f"Wrote {len(pp_layers)} pilot points × {lognorm_values.shape[0]} textures to pilot_point_values.csv")
-
-#----------------------------------------------------------------------------------------------------------------------#
-# Pilot point distance average, to inform kriging
-
-coords = ppshp[['X','Y']].to_numpy()
-nbrs = NearestNeighbors(n_neighbors=2).fit(coords)
-nn = nbrs.kneighbors(coords)[0][:,1]
-mean_nn = nn.mean()
-
-print(f'Mean PP neighbor distance:', round(mean_nn))
-
-#----------------------------------------------------------------------------------------------------------------------#
-
 #-- Setup lithology log with model lay, row, col
 
 # Read in logs

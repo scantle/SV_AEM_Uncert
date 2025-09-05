@@ -131,11 +131,11 @@ def duplicate_per_layer(pp_gdf, m, near_thresh=200.0):
     pp["L2_within_n"] = pp["L2_status"].isin(["inside", "near"])
 
     L1 = pp.copy()
-    L1["layer"] = 1
+    L1["layer"] = 0
     L1["name"] = L1["name"] + "_L1"
 
     L2 = pp.copy()
-    L2["layer"] = 2
+    L2["layer"] = 1
     L2["name"] = L2["name"] + "_L2"
     L2 = L2.query("L2_status != 'far'").copy()
 

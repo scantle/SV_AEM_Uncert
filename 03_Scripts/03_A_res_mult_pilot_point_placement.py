@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 import geopandas as gpd
-from shapely.geometry import Point, Polygon, LineString
+from shapely.geometry import Point, Polygon
 from shapely.ops import unary_union
 from pathlib import Path
 import flopy
@@ -290,11 +290,11 @@ gdf["pp_id"] = (np.arange(len(gdf)) + 1).astype(int)
 gdf["name"]  = gdf["pp_id"].map(lambda i: f"pp_{i:05d}")
 
 gdf_L1 = gdf.copy()
-gdf_L1["layer"] = 1
+gdf_L1["layer"] = 0
 gdf_L1["name"]  = gdf_L1["name"] + "_L1"
 
 gdf_L2 = gdf.copy()
-gdf_L2["layer"] = 2
+gdf_L2["layer"] = 1
 gdf_L2["name"]  = gdf_L2["name"] + "_L2"
 
 # Option A (recommended): drop "far" points from L2 entirely

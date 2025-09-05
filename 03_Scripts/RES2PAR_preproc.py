@@ -292,7 +292,7 @@ aem['logrho'] = np.log(aem['RHO_I'])
 aem['node'] = node_from_lrc_cols(aem, gwf)
 
 # Add pp "nugget" variance
-aem['var_logrho'] = aem['RHO_I_STD']**2 + grid_df.loc[aem['node'],   'aem_nugget'].to_numpy()
+aem['var_logrho'] = aem['RHO_I_STD']**2 + grid_df.loc[aem['node'],'aem_nugget'].to_numpy()
 
 # Combine dataframes
 use_cols = ['WELL_INFO_ID','x','y','row','col','layer','GROUND_SURFACE_ELEVATION_m','TOP_DEPTH_m','BOT_DEPTH_m','logrho','var_logrho','data_type']
