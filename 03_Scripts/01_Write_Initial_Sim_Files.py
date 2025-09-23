@@ -187,7 +187,7 @@ leg = hax.legend(fontsize=13, title='Texture Clusters', title_fontsize=15)
 hplt.tight_layout()
 plt.savefig(plt_dir / '01_histogram_resistivity_clusters.png', dpi=300, bbox_inches='tight')
 
-with open(out_dir / 'lognorm_dist_clustered.par', 'w') as f:
+with open(data_dir / 'lognorm_dist_clustered.par', 'w') as f:
     f.write(f"{len(fit_dists.keys())}    # Number of texture classes\n")
     f.write(f"{'Texture':>15}{'Shape':>12}{'Location':>12}{'Scale':>12}\n")
     for tex in fit_dists.keys():
