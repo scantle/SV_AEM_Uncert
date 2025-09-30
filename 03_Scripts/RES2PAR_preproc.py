@@ -14,23 +14,18 @@ from scipy.stats import lognorm
 import t2py
 import re
 
-# for debugging console
-# import os
-# os.chdir("../")
-
 #----------------------------------------------------------------------------------------------------------------------#
 # Settings
 #----------------------------------------------------------------------------------------------------------------------#
 
 # Input Files
-in_dir = Path('./04_InputFiles/RES2PAR/')
-pest_dir  = Path('./04_InputFiles/PEST/')
-pp_factor_file = in_dir / 'pp_factors.dat'
+in_dir = Path('.')
+# pest_dir  = Path('./04_InputFiles/PEST/')
 tex_dist_file = in_dir / 'lognorm_dist_clustered.par'
-out_dir = Path('./06_Outputs/')
+out_dir = Path('.')
 
 # MODFLOW Model
-mf_dir = Path('./02_Models/SVIHM_MF/')
+mf_dir = Path('../MODFLOW')
 model_name = 'svihm'
 xoff = 499977
 yoff = 4571330
@@ -306,9 +301,9 @@ for tag, cfg in tqdm(PPSETS.items(), 'PP Set', total=len(PPSETS.keys())):
             if tag=='scale_pp':
                 default_value = tex_dists[tar][2]
             dat_file = in_dir / cfg["dat_pattern"].format(lay=k+1, tex=tar)
-            tpl2dat(tpl_path=pest_dir / (cfg["dat_pattern"].format(lay=k + 1, tex=tar) + '.tpl'),
-                    default=default_value,
-                    out_path=dat_file)
+            # tpl2dat(tpl_path=pest_dir / (cfg["dat_pattern"].format(lay=k + 1, tex=tar) + '.tpl'),
+            #         default=default_value,
+            #         out_path=dat_file)
             kriged = pyemu.utils.geostats.fac2real(pp_file=str(dat_file),
                                                    factors_file=str(factor_file),
                                                    out_file=None)[0]
@@ -328,6 +323,7 @@ tex_cols = []
 for tex in tex_dists.keys():
     grid_df[tex + '_shp'] = tex_dists[tex][0]
     tex_cols.append(tex + '_scale')
+for tex in tex_dists.keys():
     tex_cols.append(tex + '_shp')
 
 # Write files for RES2PAR
@@ -395,6 +391,11 @@ aem = pd.merge(aem, aem_df, how='left', on=['WELL_INFO_ID','layer'])
 
 # Add pp "nugget" variance
 aem['var_logrho'] = aem['RHO_I_STD']**2 + aem['var_value']
+
+# plt.scatter(aem.loc[aem['layer']==0,'x'], aem.loc[aem['layer']==0,'y'], c=aem.loc[aem['layer']==0,'var_value'], s=8)
+# plt.gca().set_aspect('equal')
+# plt.colorbar(label='var_value')
+# plt.title('AEM var_value')
 
 # Combine dataframes
 use_cols = ['WELL_INFO_ID','x','y','row','col','layer','GROUND_SURFACE_ELEVATION_m','TOP_DEPTH_m','BOT_DEPTH_m','logrho','var_logrho','data_type']

@@ -48,10 +48,10 @@ scale_gs = pyemu.geostats.GeoStruct(variograms=[
     pyemu.geostats.SphVario(contribution=1.0, a=2317*3)
 ])
 lth_nug_gs = pyemu.geostats.GeoStruct(variograms=[
-    pyemu.geostats.SphVario(contribution=1.0, a=259*3)
+    pyemu.geostats.SphVario(contribution=1.0, a=259*1)
 ])
 aem_nug_gs = pyemu.geostats.GeoStruct(variograms=[
-    pyemu.geostats.SphVario(contribution=1.0, a=40*3)
+    pyemu.geostats.SphVario(contribution=1.0, a=40*2)
 ])
 kv_mult_gs = pyemu.geostats.GeoStruct(variograms=[
     pyemu.geostats.SphVario(contribution=1.0, a=93*3)
@@ -73,7 +73,7 @@ PPSETS = {
         "gs": lth_nug_gs,
         "tpl_pattern": 'pp_lth_var_L{lay}.dat.tpl',
         "dat_pattern": 'pp_lth_var_L{lay}.dat',
-        "maxpts": 16
+        "maxpts": 4
     },
     "aem_var_pp": {
         "shp": shp_dir / 'aem_pp.shp',
@@ -81,7 +81,7 @@ PPSETS = {
         "gs": aem_nug_gs,
         "tpl_pattern": 'pp_aem_var_L{lay}.dat.tpl',
         "dat_pattern": 'pp_aem_var_L{lay}.dat',
-        "maxpts": 16
+        "maxpts": 4
     },
     "kv_mult_pp": {
         "shp": shp_dir / 'mult_pp.shp',
