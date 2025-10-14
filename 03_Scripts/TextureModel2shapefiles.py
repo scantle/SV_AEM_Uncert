@@ -27,8 +27,8 @@ tex_files = {
 sv_model_shp_file = shp_dir / 'grid_properties_rep.shp'
 
 # Outputs
-grid_layer1_shapefile   = shp_dir / "texture_model_TEST_layer1.shp"
-grid_layer2_shapefile   = shp_dir / "texture_model_TEST_layer2.shp"
+grid_layer1_shapefile   = shp_dir / "texture_model_TEST_aemvar_layer1.shp"
+grid_layer2_shapefile   = shp_dir / "texture_model_TEST_aemvar_layer2.shp"
 
 # -------------------------------------------------------------------------------------------------------------------- #
 # Classes/Functions
