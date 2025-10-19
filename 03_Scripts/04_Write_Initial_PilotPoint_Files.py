@@ -21,17 +21,17 @@ from sklearn.neighbors import NearestNeighbors
 # ----------------------------------------------------------------------------------------------------------------------
 
 # Directories
-out_dir   = Path('./04_InputFiles/RES2PAR/')
-pest_dir  = Path('./04_InputFiles/PEST/')
+out_dir   = Path('./04_PEST_setup/')
 data_dir  = Path('./01_Data/')
 shp_dir   = data_dir / 'GIS/'
 plt_dir   = Path('./05_Plots/')
 
 out_dir.mkdir(parents=True, exist_ok=True)
-pest_dir.mkdir(parents=True, exist_ok=True)
 
 # MODFLOW
-mf_dir = Path('./02_Models/SVIHM_MF/')
+model_dir = Path('./02_Models/SVIHM_MF_working/')
+mf_dir = model_dir / 'MODFLOW'
+preproc_dir = model_dir / 'preproc'
 model_name = 'svihm'
 xoff = 499977
 yoff = 4571330
@@ -203,8 +203,8 @@ L2_poly = active_polygon_from_mask(mg, L2_mask)
 # Read datasets for kriging AEM/borehole variance to
 # ----------------------------------------------------------------------------------------------------------------------
 
-borehole_data = pd.read_csv(out_dir / 'lithologs.csv')
-aem_data = pd.read_csv(out_dir / 'aemlogs.csv')
+borehole_data = pd.read_csv(data_dir / 'lithologs.csv')
+aem_data = pd.read_csv(data_dir / 'aemlogs.csv')
 
 # Constrain to unique locations, based on a name
 aem_data['WELL_INFO_ID'] = aem_data['LINE_NO'].astype(int).astype(str) + "_" + aem_data['FID'].astype(int).astype(str)
@@ -266,7 +266,7 @@ for tag, cfg in tqdm(PPSETS.items(), 'PP Set', total=len(PPSETS.keys())):
         if tag == "scale_pp":
             # One template per texture per layer
             for tex in cfg["targets"]:
-                tpl_path = pest_dir / cfg['tpl_pattern'].format(lay=k+1, tex=tex)
+                tpl_path = out_dir / cfg['tpl_pattern'].format(lay=k+1, tex=tex)
                 def pname(row, t=tex, kk=k):
                     # unique, lowercase, layer-aware
                     return f"scale_{t}_l{kk}_{row.name + 1}"
@@ -274,7 +274,7 @@ for tag, cfg in tqdm(PPSETS.items(), 'PP Set', total=len(PPSETS.keys())):
                 print(f"[tpl] wrote {tpl_path}")
         else:
             par = cfg["targets"][0]
-            tpl_path = pest_dir / cfg['tpl_pattern'].format(lay=k+1)
+            tpl_path = out_dir / cfg['tpl_pattern'].format(lay=k+1)
             def pname(row, p=par, kk=k):
                 return f"{p}_l{kk}_{row.name + 1}"
             write_pp_tpl(ppl, tpl_path, parname_func=pname)
@@ -282,7 +282,7 @@ for tag, cfg in tqdm(PPSETS.items(), 'PP Set', total=len(PPSETS.keys())):
 
     # --- Build/reuse factor files per layer ---
     for k in range(layers):
-        fac_file = out_dir / f"{tag}_L{k+1}.fac"  # reused across all textures if tag == scale_pp
+        fac_file = preproc_dir / f"{tag}_L{k+1}.fac"  # reused across all textures if tag == scale_pp
         ppL = pp_locs[pp_locs["Layer"] == k][["name","zone","X","Y"]].copy()
         if ppL.empty:
             print(f"[factors] No PPs for {tag} layer {k+1} -> skip")
@@ -297,7 +297,7 @@ for tag, cfg in tqdm(PPSETS.items(), 'PP Set', total=len(PPSETS.keys())):
             target_X = tgtL["X"].to_numpy()
             target_Y = tgtL["Y"].to_numpy()
             # save the target order used in the factor file rows:
-            tgtL.assign(Layer=k)[["WELL_INFO_ID", "X", "Y", "Layer"]].to_csv(out_dir / f"{tag}_L{k + 1}_targets.csv", index=False)
+            tgtL.assign(Layer=k)[["WELL_INFO_ID", "X", "Y", "Layer"]].to_csv(preproc_dir / f"{tag}_L{k + 1}_targets.csv", index=False)
 
         elif tag == "aem_var_pp":
             tgtL = aem_targets[aem_targets["Layer"] == k]
@@ -306,7 +306,7 @@ for tag, cfg in tqdm(PPSETS.items(), 'PP Set', total=len(PPSETS.keys())):
                 continue
             target_X = tgtL["X"].to_numpy()
             target_Y = tgtL["Y"].to_numpy()
-            tgtL.assign(Layer=k)[["WELL_INFO_ID", "X", "Y", "Layer"]].to_csv(out_dir / f"{tag}_L{k + 1}_targets.csv", index=False)
+            tgtL.assign(Layer=k)[["WELL_INFO_ID", "X", "Y", "Layer"]].to_csv(preproc_dir / f"{tag}_L{k + 1}_targets.csv", index=False)
 
         else:
             # scale_pp and kv_mult_pp still target the model grid
@@ -336,7 +336,7 @@ for tag, cfg in tqdm(PPSETS.items(), 'PP Set', total=len(PPSETS.keys())):
 
 # Initial PP value tables: useful to seed starting values/out-of-loop inspection.
 # For 'scale_pp', we can emit one CSV per texture with initial "parval1" from tex_scale_init.
-init_dir = out_dir / "../pp_init_csv"
+init_dir = data_dir / "pp_init_csv"
 init_dir.mkdir(exist_ok=True, parents=True)
 
 for tag, cfg in tqdm(PPSETS.items(), 'PP Set', total=len(PPSETS.keys())):
@@ -348,9 +348,12 @@ for tag, cfg in tqdm(PPSETS.items(), 'PP Set', total=len(PPSETS.keys())):
         locs = add_layer_column(locs[["X","Y"]], layers)
         locs = locs.reset_index(drop=True)
         locs["name"] = [f"pp_{base_tag}_L{int(L)}_{i+1}" for i, L in enumerate(locs["Layer"].to_numpy())]
-        for tex in cfg["targets"]:
+        for i, tex in enumerate(cfg["targets"]):
             df = locs[["name","X","Y","Layer"]].copy()
-            df["parval1"] = tex_scale_init.get(tex, 0.0)
+            df["parval1"] = 1.0
+            if i>0:
+                # Multiplier Edition
+                df["parval1"] = tex_scale_init[tex]/tex_scale_init[texs[i-1]]
             df.to_csv(init_dir / f"init_{tag}_{tex}.csv", index=False)
     else:
         locs = gpd.read_file(cfg["shp"])
@@ -417,6 +420,6 @@ plt.show()
 for tag, mean_nn in nn_report.items():
     print(f"Mean NN distance [{tag}]: {round(mean_nn)} m")
 
-print("\nDone. Templates written to", pest_dir)
-print("Factor files written to", pest_dir)
+print("\nDone. Templates written to", out_dir)
+print("Factor files written to", out_dir)
 print("Initial CSVs written to", init_dir)

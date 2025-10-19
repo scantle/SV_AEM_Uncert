@@ -1,3 +1,9 @@
+"""
+Write_Initial_Files.py
+- Re-fits lognormal distributions to metaclusters, writes lognorm_dist_clustered.par
+- Makes initial lithologic and aem data files from DWR data (lithologs.csv, aemlogs.csv)
+"""
+
 import matplotlib
 matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
@@ -22,7 +28,6 @@ from aem_read import read_xyz, aem_wide2long
 #----------------------------------------------------------------------------------------------------------------------#
 
 # Directories
-out_dir = Path('./04_InputFiles/RES2PAR/')
 data_dir = Path ('./01_Data/')
 shp_dir = data_dir / 'GIS/'
 plt_dir = Path('./05_Plots/')
@@ -36,8 +41,6 @@ aem_hqwells_file = shp_dir / 'aem_sv_HQ_LithologyWells_UTM10N.shp'
 aem_lqwells_file = shp_dir / 'aem_sv_LQ_LithologyWells_UTM10N.shp'
 aem_sharp_sv_file = shp_dir / 'aem_sv_Sharp_I01_MOD_inv_UTM10N.shp'
 sv_model_domain_file = shp_dir / 'Model_Domain_20180222.shp'
-
-out_dir.mkdir(parents=True, exist_ok=True)
 
 # MODFLOW Model
 mf_dir = Path('./02_Models/SVIHM_MF/')
@@ -252,8 +255,8 @@ litho['layer'] = gwf.dis.get_layer(litho['row'], litho['col'], litho['z'])
 litho = litho.rename({'LITH_TOP_DEPTH_m': 'TOP_DEPTH_m', 'LITH_BOT_DEPTH_m': 'BOT_DEPTH_m'}, axis=1)
 
 # Write out litho_df file
-out_cols = ['WELL_INFO_ID','row','col','layer','x','y','GROUND_SURFACE_ELEVATION_m','TOP_DEPTH_m','BOT_DEPTH_m','tex']
-litho[out_cols].to_csv(out_dir / 'lithologs.csv', index=False)
+out_cols = ['WELL_INFO_ID','row','col','layer','x','y','z','GROUND_SURFACE_ELEVATION_m','TOP_DEPTH_m','BOT_DEPTH_m','tex']
+litho[out_cols].to_csv(data_dir / 'lithologs.csv', index=False)
 
 #----------------------------------------------------------------------------------------------------------------------#
 
@@ -311,7 +314,7 @@ aem_long['layer'] = gwf.dis.get_layer(aem_long['row'], aem_long['col'], aem_long
 aem_long = aem_long.rename({'DEP_TOP': 'TOP_DEPTH_m', 'DEP_BOT': 'BOT_DEPTH_m', 'ELEVATION':'GROUND_SURFACE_ELEVATION_m'}, axis=1)
 
 # Write out litho_df file
-out_cols = ['LINE_NO','FID','row','col','layer','x','y','GROUND_SURFACE_ELEVATION_m','TOP_DEPTH_m','BOT_DEPTH_m','RHO_I','RHO_I_STD']
-aem_long[out_cols].to_csv(out_dir / 'aemlogs.csv', index=False)
+out_cols = ['LINE_NO','FID','row','col','layer','x','y','z','GROUND_SURFACE_ELEVATION_m','TOP_DEPTH_m','BOT_DEPTH_m','RHO_I','RHO_I_STD']
+aem_long[out_cols].to_csv(data_dir / 'aemlogs.csv', index=False)
 
 #----------------------------------------------------------------------------------------------------------------------#

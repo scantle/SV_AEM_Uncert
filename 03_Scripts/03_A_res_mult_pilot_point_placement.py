@@ -14,7 +14,8 @@ import flopy
 data_dir = Path('./01_Data/')
 shp_dir = data_dir / 'GIS/'
 
-out_dir=Path("./06_Outputs/")
+out_dir = data_dir / 'PPlocs'
+out_dir.mkdir(exist_ok=True)
 
 # MODFLOW Model
 mf_dir = Path('./02_Models/SVIHM_MF/')

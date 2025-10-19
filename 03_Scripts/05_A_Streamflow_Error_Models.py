@@ -11,7 +11,8 @@ from pathlib import Path
 #----------------------------------------------------------------------------------------------------------------------#
 
 data_dir = Path('01_Data/')
-out_dir = Path('06_Outputs')
+out_dir  = data_dir
+pest_dir = Path("04_PEST_setup")   # TPL, INS
 
 streams = ['FJ','SCK','AS','BY']
 stream_files = ['FJ (USGS 11519500) Daily Flow, 1990-10-01_2025-08-31.csv',
@@ -48,6 +49,8 @@ USGS_field_meas_cols = ['agency_cd', 'site_no', 'measurement_nu', 'measurement_d
 cfs_to_m3d = (0.3048)**3 * 86400
 
 np.random.seed(667)
+
+origin_date = pd.to_datetime('1990-9-30')
 
 #----------------------------------------------------------------------------------------------------------------------#
 # Classes/Functions
@@ -494,6 +497,48 @@ def make_obs_table(
     return out
 
 #----------------------------------------------------------------------------------------------------------------------#
+
+def write_ts_ins_file(obs_df, origin_date, skip_rows, ins_filename, column_str=None, markers=None, date_col="date"):
+    """
+    Writes a PEST instruction (ins) file for streamflow observations with optimized skipping.
+
+    Parameters:
+    obs_df (pd.DataFrame): DataFrame containing columns ['Date', 'obsnme']
+    origin_date (pd.Timestamp): Model start date
+    ins_filename (str or Path): Name of the output instruction file
+    """
+    obs_df = obs_df.sort_values(by=date_col).reset_index(drop=True)
+
+    # Open file
+    with open(ins_filename, 'w') as f:
+        f.write("pif @\n")  # PEST instruction file header
+
+        current_date = origin_date + pd.DateOffset(days=1)
+        for i, row in obs_df.iterrows():
+            days_skipped = (row[date_col] - current_date).days
+            if i == 0:
+                days_skipped += skip_rows
+            if column_str is not None:
+                f.write(f"l{days_skipped + 1} [{row['obsnme']}]{column_str}\n")
+            elif markers is not None:
+                f.write(f"l{days_skipped + 1} {markers} !{row['obsnme']}!\n")
+            else:
+                raise ValueError("Must pass either markers or column_str")
+            current_date = row[date_col] + pd.Timedelta(days=1)
+
+    print(f"Instruction file written: {ins_filename}")
+
+#----------------------------------------------------------------------------------------------------------------------#
+
+def write_static_ins_file(obs_df, ins_filename, markers):
+    # Open file
+    with open(ins_filename, 'w') as f:
+        f.write("pif @\n")  # PEST instruction file header
+        for i, row in obs_df.iterrows():
+            f.write(f"l1 {markers} !{row['obsnme']}!\n")
+    print(f"Instruction file written: {ins_filename}")
+
+#----------------------------------------------------------------------------------------------------------------------#
 # Fort Jones
 #----------------------------------------------------------------------------------------------------------------------#
 
@@ -678,3 +723,27 @@ cols = ['obsnme', 'obsval', 'obsstd']
 all_obs = pd.concat([fj_obs[cols], fj_month_vol[cols], fj_year_vol[cols], sck_obs[cols], as_obs[cols], by_obs[cols]], axis=0)
 
 all_obs.to_csv(out_dir / 'streamflow_obs_std.csv', index=False)
+
+# Write INS files
+write_ts_ins_file(fj_obs, origin_date,0, pest_dir /'Streamflow_FJ_SVIHM_MidptFlow_LOG.ins', markers='w')
+write_ts_ins_file(sck_obs,origin_date,0, pest_dir / 'Streamflow_SCK_SVIHM_MidptFlow_LOG.ins', markers='w')
+write_ts_ins_file(as_obs, origin_date,0, pest_dir /'Streamflow_AS_SVIHM_MidptFlow_LOG.ins', markers='w')
+write_ts_ins_file(by_obs, origin_date,0, pest_dir /'Streamflow_BY_SVIHM_MidptFlow_LOG.ins', markers='w')
+
+# Crude INS metrics addition
+for stream in streams:
+    with open(pest_dir / f'Streamflow_{stream}_SVIHM_MidptFlow_LOG.ins', 'a') as f:
+        f.write(f'l1 w !{stream}_NSE!\n')
+        f.write(f'l1 w !{stream}_KGE!\n')
+        f.write(f'l1 w !{stream}_RMSE!\n')
+
+# Write obs files so we can have per-stream stats as observation targets
+# fj_obs.to_csv(out_dir / 'FJ_log.csv', index=False)
+# sck_obs.to_csv(out_dir / 'SCK_log.csv', index=False)
+# as_obs.to_csv(out_dir / 'AS_log.csv', index=False)
+# by_obs.to_csv(out_dir / 'BY_log.csv', index=False)
+
+# Write VOLUME INS files
+fj_vol = pd.concat([fj_year_vol[['obsnme', 'obsval',]],
+                    fj_month_vol[['obsnme', 'obsval',]]]).reset_index(drop=True)
+write_static_ins_file(fj_vol, pest_dir / 'Streamflow_FJ_SVIHM_VOL.ins', markers='w')

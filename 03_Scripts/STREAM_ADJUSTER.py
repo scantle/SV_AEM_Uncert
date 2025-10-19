@@ -15,7 +15,7 @@ out_files = ['subwatershed_nonirrigation_inflows.txt', 'subwatershed_irrigation_
 # Main
 #----------------------------------------------------------------------------------------------------------------------#
 
-print('streamflow_adjuster.py')
+print('STREAM_ADJUSTER.py')
 
 multipliers = pd.read_table(multiplier_file, sep='\s+', index_col=0)
 

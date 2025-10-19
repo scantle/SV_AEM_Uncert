@@ -20,9 +20,11 @@ import re
 
 # Input Files
 in_dir = Path('.')
-# pest_dir  = Path('./04_InputFiles/PEST/')
 tex_dist_file = in_dir / 'lognorm_dist_clustered.par'
 out_dir = Path('.')
+
+# temp
+# pest_dir = Path('C:/Users/lelan/Documents/CodeProjects/PhD_SV_AEM_Uncert/04_PEST_setup')
 
 # MODFLOW Model
 mf_dir = Path('../MODFLOW')
@@ -297,9 +299,11 @@ for tag, cfg in tqdm(PPSETS.items(), 'PP Set', total=len(PPSETS.keys())):
         factor_file = in_dir / cfg["fac_pattern"].format(lay=k+1)
         if tag=="lth_var_pp" or tag=="aem_var_pp":
             target_map = pd.read_csv(in_dir / cfg["target_file"].format(lay=k+1))
-        for tar in cfg['targets']:
+        for i, tar in enumerate(cfg['targets']):
             if tag=='scale_pp':
-                default_value = tex_dists[tar][2]
+                default_value = 1.0
+                if i>0:
+                    default_value = tex_dists[tar][2] / tex_dists[texs[i-1]][2]
             dat_file = in_dir / cfg["dat_pattern"].format(lay=k+1, tex=tar)
             # tpl2dat(tpl_path=pest_dir / (cfg["dat_pattern"].format(lay=k + 1, tex=tar) + '.tpl'),
             #         default=default_value,
@@ -314,7 +318,11 @@ for tag, cfg in tqdm(PPSETS.items(), 'PP Set', total=len(PPSETS.keys())):
                 target_map['var_value'] = kriged
                 aem_df = pd.concat([aem_df, target_map])
             elif tag=='scale_pp':
-                grid_df.loc[grid_df['layer']==k, tar + '_scale'] = kriged
+                if i<1:  # base
+                    grid_df.loc[grid_df['layer'] == k, tar + '_scale'] = kriged * tex_dists[tar][2]
+                else:    # mult
+                    prev = grid_df.loc[grid_df['layer']==k, texs[i-1] + '_scale'].values
+                    grid_df.loc[grid_df['layer']==k, tar + '_scale'] = kriged * prev
             elif tag=='kv_mult_pp':
                 grid_df.loc[grid_df['layer'] == k, 'kv_mult'] = kriged
 

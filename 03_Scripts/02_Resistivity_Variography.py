@@ -14,7 +14,7 @@ from math import radians, pi
 #----------------------------------------------------------------------------------------------------------------------#
 
 # Input Files
-in_dir = Path('./04_InputFiles/RES2PAR/')
+in_dir = Path('./01_Data/')
 plt_dir = Path('./05_Plots')
 
 # MODFLOW Model
@@ -284,4 +284,3 @@ plt.show()
 plt.savefig(plt_dir / f'{major_angle}_degree_major_variogram.png', dpi=300)
 
 #----------------------------------------------------------------------------------------------------------------------#
-s

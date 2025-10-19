@@ -16,7 +16,8 @@ import flopy
 data_dir = Path('./04_InputFiles/RES2PAR')
 shp_dir = Path('01_Data/GIS/')
 
-out_dir=Path("./06_Outputs/")  # for csvs, shapefiles go in shp_dir
+out_dir = data_dir / 'PPlocs' # for csvs, shapefiles go in shp_dir
+out_dir.mkdir(exist_ok=True)
 
 # MODFLOW Model
 mf_dir = Path('./02_Models/SVIHM_MF/')
