@@ -133,7 +133,7 @@ def model_to_grid_df(mf, xoff=0.0, yoff=0.0):
     }).set_index("node")
     return df
 
-def write_pp_tpl(df, tpl_path, parname_func):
+def write_pp_tpl(df, tpl_path, parnme_func):
     """
     Write a PEST/pyemu PP template file with columns:
     name zone x y parval1
@@ -142,7 +142,7 @@ def write_pp_tpl(df, tpl_path, parname_func):
     df = df.copy()
     df["zone"] = df.get("zone", 0)
     df["name"] = df["name"].astype(str)
-    df["parval1"] = [f"$ {parname_func(r)} $" for _, r in df.iterrows()]
+    df["parval1"] = [f"$ {parnme_func(r)} $" for _, r in df.iterrows()]
     with open(tpl_path, "w") as f:
         f.write("ptf $\n")
         for _, r in df.iterrows():
@@ -185,6 +185,41 @@ def prep_pp_locations(shp_path, base_tag, allow_layer_dup=True):
     g["name"] = [f"pp_{base_tag}_L{int(L)}_{i+1}" for i, L in enumerate(g["Layer"].to_numpy())]
     g["zone"] = 0
     return g
+
+def assign_parnmes(ppl: pd.DataFrame, *, tag: str, layer_idx: int, tex: str | None = None):
+    """Return a copy of ppl with 'parnme' and 'pargp' columns added.
+    - parnme must match exactly what goes inside `$ parnme $` in the TPL
+    - pargp is a convenient group label you can later use in the PEST control
+    """
+    out = ppl.copy()
+    # 0-based layer index is used in your current parnme pattern (l{kk})
+    if tag == "scale_pp":
+        assert tex is not None, "Texture must be provided for scale_pp"
+        out["parnme"] = [f"scale_{tex}_l{layer_idx}_{i+1}" for i in range(len(out))]
+        # human-friendly group label (use 1-based for readability if you like)
+        out["pargp"]   = f"scale_{tex}_L{layer_idx+1}"
+    else:
+        # the single target/keyword for this pp set becomes the base
+        base = {
+            "lth_var_pp": "lth_var",
+            "aem_var_pp": "aem_var",
+            "kv_mult_pp": "kv_mult",
+        }[tag]
+        out["parnme"] = [f"{base}_l{layer_idx}_{i+1}" for i in range(len(out))]
+        out["pargp"]   = f"{base}"
+    return out
+
+
+def write_pp_tpl(df_with_names: pd.DataFrame, tpl_path: Path):
+    """Write a PP TPL file using an existing 'parnme' column."""
+    df = df_with_names.copy()
+    df["zone"] = df.get("zone", 0)
+    df["name"] = df["name"].astype(str)
+    with open(tpl_path, "w") as f:
+        f.write("ptf $\n")
+        for _, r in df.iterrows():
+            f.write(f"{r['name']} {int(r['zone'])} {r['X']:.3f} {r['Y']:.3f} $ {r['parnme']} $\n")
+
 
 # ----------------------------------------------------------------------------------------------------------------------
 # Model/grid
@@ -263,21 +298,18 @@ for tag, cfg in tqdm(PPSETS.items(), 'PP Set', total=len(PPSETS.keys())):
         ppl = pp_locs[pp_locs["Layer"] == k].copy()
         if ppl.empty:
             continue
+
         if tag == "scale_pp":
-            # One template per texture per layer
+            # one template per texture per layer
             for tex in cfg["targets"]:
-                tpl_path = out_dir / cfg['tpl_pattern'].format(lay=k+1, tex=tex)
-                def pname(row, t=tex, kk=k):
-                    # unique, lowercase, layer-aware
-                    return f"scale_{t}_l{kk}_{row.name + 1}"
-                write_pp_tpl(ppl, tpl_path, parname_func=pname)
+                tpl_path = out_dir / cfg['tpl_pattern'].format(lay=k + 1, tex=tex)
+                ppl_named = assign_parnmes(ppl, tag=tag, layer_idx=k, tex=tex)
+                write_pp_tpl(ppl_named, tpl_path)
                 print(f"[tpl] wrote {tpl_path}")
         else:
-            par = cfg["targets"][0]
-            tpl_path = out_dir / cfg['tpl_pattern'].format(lay=k+1)
-            def pname(row, p=par, kk=k):
-                return f"{p}_l{kk}_{row.name + 1}"
-            write_pp_tpl(ppl, tpl_path, parname_func=pname)
+            tpl_path = out_dir / cfg['tpl_pattern'].format(lay=k + 1)
+            ppl_named = assign_parnmes(ppl, tag=tag, layer_idx=k)
+            write_pp_tpl(ppl_named, tpl_path)
             print(f"[tpl] wrote {tpl_path}")
 
     # --- Build/reuse factor files per layer ---
@@ -331,43 +363,64 @@ for tag, cfg in tqdm(PPSETS.items(), 'PP Set', total=len(PPSETS.keys())):
         nn_report[tag] = float(np.mean(nn))
 
 # ----------------------------------------------------------------------------------------------------------------------
-# Write CSVs
+# Write CSVs (with actual parnmes + groups)
 # ----------------------------------------------------------------------------------------------------------------------
-
-# Initial PP value tables: useful to seed starting values/out-of-loop inspection.
-# For 'scale_pp', we can emit one CSV per texture with initial "parval1" from tex_scale_init.
 init_dir = data_dir / "pp_init_csv"
 init_dir.mkdir(exist_ok=True, parents=True)
 
 for tag, cfg in tqdm(PPSETS.items(), 'PP Set', total=len(PPSETS.keys())):
-    base_tag = tag.replace("_pp","")
+    pp_locs = gpd.read_file(cfg["shp"])
+    pp_locs["X"], pp_locs["Y"] = pp_locs.geometry.x, pp_locs.geometry.y
+
     if tag == "scale_pp":
-        # create per-texture initial CSV
-        locs = gpd.read_file(cfg["shp"])
-        locs["X"], locs["Y"] = locs.geometry.x, locs.geometry.y
-        locs = add_layer_column(locs[["X","Y"]], layers)
-        locs = locs.reset_index(drop=True)
-        locs["name"] = [f"pp_{base_tag}_L{int(L)}_{i+1}" for i, L in enumerate(locs["Layer"].to_numpy())]
+        # duplicate across layers, same as you do earlier
+        locs = add_layer_column(pp_locs[["X","Y"]], layers).reset_index(drop=True)
+        locs["name"] = [f"pp_scale_L{int(L)}_{i+1}" for i, L in enumerate(locs["Layer"].to_numpy())]
+
         for i, tex in enumerate(cfg["targets"]):
-            df = locs[["name","X","Y","Layer"]].copy()
-            df["parval1"] = 1.0
-            if i>0:
-                # Multiplier Edition
-                df["parval1"] = tex_scale_init[tex]/tex_scale_init[texs[i-1]]
-            df.to_csv(init_dir / f"init_{tag}_{tex}.csv", index=False)
+            # do it per layer to match numbering
+            rows = []
+            for k in range(layers):
+                ppl = locs[locs["Layer"] == k].copy()
+                if ppl.empty:
+                    continue
+                ppl_named = assign_parnmes(ppl, tag=tag, layer_idx=k, tex=tex)
+                rows.append(ppl_named)
+
+            out = pd.concat(rows, ignore_index=True)
+            out["parval1"] = 1.0
+            if i > 0:
+                out["parval1"] = tex_scale_init[tex] / tex_scale_init[texs[i-1]]
+
+            out[["name","parnme","pargp","X","Y","Layer","parval1"]].to_csv(
+                init_dir / f"init_{tag}_{tex}.csv", index=False
+            )
+
     else:
-        locs = gpd.read_file(cfg["shp"])
-        locs["X"], locs["Y"] = locs.geometry.x, locs.geometry.y
-        if "layer" in locs.columns:
-            locs = locs.rename(columns={"layer":"Layer"})
+        # respect optional 'layer' field if present
+        if "layer" in pp_locs.columns:
+            pp_locs = pp_locs.rename(columns={"layer":"Layer"})
         else:
-            locs["Layer"] = 0
-        locs = locs.reset_index(drop=True)
-        locs["name"] = [f"pp_{base_tag}_L{int(L)}_{i+1}" for i, L in enumerate(locs["Layer"].to_numpy())]
+            pp_locs["Layer"] = 0
+        pp_locs = pp_locs.reset_index(drop=True)
+        base_tag = tag.replace("_pp","")
+        pp_locs["name"] = [f"pp_{base_tag}_L{int(L)}_{i+1}" for i, L in enumerate(pp_locs["Layer"].to_numpy())]
+
+        rows = []
+        for k in range(layers):
+            ppl = pp_locs[pp_locs["Layer"] == k].copy()
+            if ppl.empty:
+                continue
+            ppl_named = assign_parnmes(ppl, tag=tag, layer_idx=k)
+            rows.append(ppl_named)
+
+        out = pd.concat(rows, ignore_index=True)
+        out["parval1"] = 0.0
         par = cfg["targets"][0]
-        df = locs[["name","X","Y","Layer"]].copy()
-        df["parval1"] = 0.0
-        df.to_csv(init_dir / f"init_{tag}_{par}.csv", index=False)
+        out[["name","parnme","pargp","X","Y","Layer","parval1"]].to_csv(
+            init_dir / f"init_{tag}_{par}.csv", index=False
+        )
+
 
 # ----------------------------------------------------------------------------------------------------------------------
 # Plot PP types by layer
@@ -421,5 +474,5 @@ for tag, mean_nn in nn_report.items():
     print(f"Mean NN distance [{tag}]: {round(mean_nn)} m")
 
 print("\nDone. Templates written to", out_dir)
-print("Factor files written to", out_dir)
+print("Factor files written to", preproc_dir)
 print("Initial CSVs written to", init_dir)

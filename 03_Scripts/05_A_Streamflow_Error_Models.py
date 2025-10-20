@@ -193,7 +193,7 @@ class StreamflowUncertainty:
             RMSE[idx_biased] = np.sqrt(np.mean(eB**2, axis=1))
 
         out = self.df.copy()
-        out['sd_lin'] = RMSE  # linear-space SD (this is what M&W pass to PEST-IES)
+        out['sd_lin'] = RMSE  # linear-space SD
         return out
 
     @staticmethod
@@ -454,6 +454,8 @@ def make_obs_table(
         raise ValueError(f"Expected '{q_col}' and '{sd_lin_col}' in dataframe.")
     if transform == "log10" and sd_log10_col not in df.columns:
         raise ValueError(f"transform='log10' requires '{sd_log10_col}' column. Compute it first.")
+    if 'weight' not in df.columns:
+        df['weight'] = np.nan
 
     # choose value + sd columns
     if transform == "linear":
@@ -469,7 +471,9 @@ def make_obs_table(
     base = pd.DataFrame({
         "date": pd.to_datetime(df[date_col]),
         "obsval": val,
-        "obsstd": sd
+        "obsstd": sd,
+        "weight": df['weight'],
+        "regime": df['regime'],
     })
 
     # drop NA rows (missing flow or sd)
@@ -493,7 +497,48 @@ def make_obs_table(
         raise ValueError("freq must be 'D' or 'M'.")
 
     # final order + types
-    out = out[["obsnme", "obsval", "obsstd", "date"]].sort_values("date").reset_index(drop=True)
+    out = out[["obsnme", "obsval", "obsstd", "weight", "regime", "date"]].sort_values("date").reset_index(drop=True)
+    return out
+
+#----------------------------------------------------------------------------------------------------------------------#
+
+def apply_sd_floor_by_regime(df, sd_col='sd_log10', regime_col='regime',
+                             regime_name='low', floor_percentile=10, fallback_floor=0.2):
+    """
+    Raise non-positive or non-finite SDs to a small floor derived from the specified regime.
+    - floor = percentile of positive SDs within that regime, else fallback_floor (dex).
+    - fallback_floor (dex) if there isn't any values (default 0.2)
+    """
+    df = df.copy()
+    # candidate pool for floor
+    pool = df.loc[(df[regime_col] == regime_name) & np.isfinite(df[sd_col]) & (df[sd_col] > 0), sd_col]
+    if len(pool):
+        floor_val = np.nanpercentile(pool, floor_percentile)
+        if not np.isfinite(floor_val) or floor_val <= 0:
+            floor_val = fallback_floor
+    else:
+        floor_val = fallback_floor
+
+    bad = ~np.isfinite(df[sd_col]) | (df[sd_col] <= 0)
+    df.loc[bad, sd_col] = floor_val
+    return df, floor_val
+
+#----------------------------------------------------------------------------------------------------------------------#
+
+def weights_regime_equalized(df, regime_col='regime', min_w=0.2, max_w=5.0):
+    """
+    Give each regime the same total weight mass; divide by its count.
+    Then normalize so mean weight = 1 across the whole series and clamp.
+    """
+    out = df.copy()
+    counts = out[regime_col].value_counts().to_dict()
+    # avoid division by zero; unknown regimes get mean count
+    mean_count = np.mean(list(counts.values())) if counts else 1.0
+    base = out[regime_col].map(lambda r: 1.0 / counts.get(r, mean_count))
+    # equalize totals: sum(base) = number of regimes
+    base = base / base.mean()
+    w = base / base.mean()  # mean ≈ 1
+    out['weight'] = w.clip(min_w, max_w)
     return out
 
 #----------------------------------------------------------------------------------------------------------------------#
@@ -580,13 +625,18 @@ fj_daily_sd['sd_log10'] = StreamflowUncertainty.delta_method_log_sd(fj_daily_sd[
 stat_plots(fj_daily_sd)
 uncert_hydrograph(fj_daily_sd, start='10/01/2020', end='10/01/2025', name='Fort Jones')
 
+# Calculate weights by regime
+fj_daily_sd = weights_regime_equalized(fj_daily_sd)
+
 fj_obs = make_obs_table(sd_df=fj_daily_sd, gauge_id=streams[0], transform="log10")
 
 # Monthly volumes (sum of daily m³/d → m³/month) with ≥80% day coverage
 fj_month_vol = sim.make_obs_table_aggregate(gauge_id="FJ", freq='M', agg='sum')
+fj_month_vol['weight'] = 1 / fj_month_vol['obsstd']
 
 # Annual volumes
 fj_year_vol = sim.make_obs_table_aggregate(gauge_id="FJ", freq='Y', agg='sum')
+fj_year_vol['weight'] = 1 / fj_year_vol['obsstd']
 
 #----------------------------------------------------------------------------------------------------------------------#
 # Shackleford (SCK)
@@ -629,10 +679,15 @@ sck_daily_sd = sck_sim.simulate_rmse()
 sck_daily_sd['sd_log10'] = StreamflowUncertainty.delta_method_log_sd(sck_daily_sd['sd_lin'].to_numpy(),
                                                                  sck_daily_sd['q'].to_numpy(),
                                                                  base=10)
+# Protect from zeros
+sck_daily_sd, sck_floor = apply_sd_floor_by_regime(sck_daily_sd)
 
 # Plots
 stat_plots(sck_daily_sd)
 uncert_hydrograph(sck_daily_sd, start='10/01/2016', end='10/01/2018', name='Shackleford')
+
+# Calculate weights by regime
+sck_daily_sd = weights_regime_equalized(sck_daily_sd)
 
 sck_obs = make_obs_table(sd_df=sck_daily_sd, gauge_id=streams[1], transform="log10")
 
@@ -670,9 +725,15 @@ as_daily_sd['sd_log10'] = StreamflowUncertainty.delta_method_log_sd(as_daily_sd[
                                                                  as_daily_sd['q'].to_numpy(),
                                                                  base=10)
 
+# Protect from zeros
+as_daily_sd, as_floor = apply_sd_floor_by_regime(as_daily_sd)
+
 # Plots
 stat_plots(as_daily_sd)
 uncert_hydrograph(as_daily_sd, name='Above Serpa Lane')
+
+# Calculate weights by regime
+as_daily_sd = weights_regime_equalized(as_daily_sd)
 
 as_obs = make_obs_table(sd_df=as_daily_sd, gauge_id=streams[2], transform="log10")
 
@@ -710,17 +771,25 @@ by_daily_sd['sd_log10'] = StreamflowUncertainty.delta_method_log_sd(by_daily_sd[
                                                                  by_daily_sd['q'].to_numpy(),
                                                                  base=10)
 
+# Protect from zeros
+by_daily_sd, by_floor = apply_sd_floor_by_regime(by_daily_sd)
+
 # Plots
 stat_plots(by_daily_sd)
 uncert_hydrograph(by_daily_sd, name="Below Young's Dam")
+
+# Calculate weights by regime
+by_daily_sd = weights_regime_equalized(by_daily_sd)
 
 by_obs = make_obs_table(sd_df=by_daily_sd, gauge_id=streams[3], transform="log10")
 
 #----------------------------------------------------------------------------------------------------------------------#
 # Combine obs tables, write output file
 #----------------------------------------------------------------------------------------------------------------------#
-cols = ['obsnme', 'obsval', 'obsstd']
+cols = ['obsnme', 'obsval', 'obsstd', 'weight']
 all_obs = pd.concat([fj_obs[cols], fj_month_vol[cols], fj_year_vol[cols], sck_obs[cols], as_obs[cols], by_obs[cols]], axis=0)
+
+all_obs.rename({'obsstd': 'standard_deviation'}, axis=1, inplace=True)
 
 all_obs.to_csv(out_dir / 'streamflow_obs_std.csv', index=False)
 
