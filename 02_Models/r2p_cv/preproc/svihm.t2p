@@ -1,0 +1,72 @@
+*==============================================================================
+* Texture2Par Main Input File
+*==============================================================================
+ 
+BEGIN OPTIONS
+  INTERP_DIM 3D
+  USE_MODEL_GSE
+  MAX_OUTSIDE_DIST 500
+  KVME
+  NO_TEX_BOUNDS
+  MAX_LOG_LENGTH 30
+  ANISOTROPIC_SEARCH
+  WRITE_DATASET_FILES
+  WRITE_NODE_FILES
+END OPTIONS
+ 
+BEGIN FLOW_MODEL
+  TYPE MODFLOW
+  NAM_FILE      ../MODFLOW/SVIHM_t2p.nam
+  TEMPLATE_FILE SVIHM_TEMPLATE.upw
+  XOFFSET       499977.0
+  YOFFSET       4571330.0
+  ROTATION      0.0
+  BLOCK_MODE
+END FLOW_MODEL
+ 
+BEGIN CLASSES
+  Fine
+  Mixed_Fine
+  Sand
+  Mixed_Coarse
+  Very_Coarse
+END CLASSES
+
+BEGIN PREPROC
+  MODE  RES2TEXTURE
+  CLASS logrho
+  SCALE_FILE interp_tex_dists.csv
+  MULT_FILE kv_mult.csv
+END PREPROC
+ 
+BEGIN DATASET
+  FILE     res_log.csv
+END DATASET
+ 
+BEGIN VARIOGRAMS
+  # Structure Vtype  Nugget  Sill  Range_min Range_max Range_vert ang1 ang2 ang3  nnear
+  CLASS logrho
+           1    Sph     0.0 0.430      670.0     984.0       78.4  0.0  0.0  0.0    96
+  # Structure Vtype  Nugget  Sill  Range_min Range_max ang1  nnear
+  CLASS PilotPoints
+           1    Sph    0.00   1.0      1.0E5     1.0E5  0.0  25
+END VARIOGRAMS
+ 
+BEGIN PP_LOCS
+# ID          X           Y Zone
+  1    511983.0   4599271.0    1
+END PP_LOCS
+ 
+BEGIN PP_PARAMETERS
+  TYPE Global
+# ID   KHp    KVp   STp
+    1    .93530100000  -.6205910000   1.0
+  TYPE Aquifer
+# ID    Class             Kmin             Kmax              Ss              Sy           Aniso     Kd
+   1   Fine            2.4076200E-01      2.4076200E-01     2.2448680E-04     2.3609503E-02     1.1041294E+01  0.007
+   1   Mixed_Fine      6.4030172E+00      6.4030172E+00     1.7091347E-04     2.9929128E-02     9.7487125E+00  0.007
+   1   Sand            3.3778029E+01      3.3778029E+01     9.7554676E-05     2.4992800E-01     8.9663946E+00  0.007
+   1   Mixed_Coarse    3.3778029E+01      3.3778029E+01     4.4976803E-05     2.0001688E-01     8.2400355E+00  0.007
+   1   Very_Coarse     3.3778029E+01      3.3778029E+01     2.0585658E-05     3.8621059E-02     3.2785200E+00  0.007
+END PP_PARAMETERS
+ 

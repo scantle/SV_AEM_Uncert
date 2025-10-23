@@ -194,4 +194,4 @@ cython_debug/
 .cursorindexingignore
 
 # Custom to ignore intermediate output
-*/CONTEX/*
+04_Pest_setup/*

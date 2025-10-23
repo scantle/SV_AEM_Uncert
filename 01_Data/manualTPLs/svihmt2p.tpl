@@ -7,6 +7,7 @@ BEGIN OPTIONS
   INTERP_DIM 3D
   USE_MODEL_GSE
   MAX_OUTSIDE_DIST 500
+  MAX_LOG_LENGTH 3
   KVME
   NO_TEX_BOUNDS
   ANISOTROPIC_SEARCH
@@ -46,7 +47,7 @@ END DATASET
 BEGIN VARIOGRAMS
   # Structure Vtype  Nugget  Sill  Range_min Range_max Range_vert ang1 ang2 ang3  nnear
   CLASS logrho
-           1    Sph     0.0 0.430      670.0     984.0       78.4  0.0  0.0  0.0    96
+           1    Sph     0.0 0.430      670.0     984.0       78.4  0.0  0.0  0.0    64
   # Structure Vtype  Nugget  Sill  Range_min Range_max ang1  nnear
   CLASS PilotPoints
            1    Sph    0.00   1.0      1.0E5     1.0E5  0.0  25

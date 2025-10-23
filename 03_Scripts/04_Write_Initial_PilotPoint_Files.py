@@ -45,16 +45,16 @@ texs = ['Fine', 'Mixed_Fine', 'Sand', 'Mixed_Coarse', 'Very_Coarse']
 
 # Variograms (one GeoStruct per PP-type)
 scale_gs = pyemu.geostats.GeoStruct(variograms=[
-    pyemu.geostats.SphVario(contribution=1.0, a=2317*3)
+    pyemu.geostats.ExpVario(contribution=1.0, a=2317*2)
 ])
 lth_nug_gs = pyemu.geostats.GeoStruct(variograms=[
-    pyemu.geostats.SphVario(contribution=1.0, a=259*1)
+    pyemu.geostats.ExpVario(contribution=1.0, a=259*1)
 ])
 aem_nug_gs = pyemu.geostats.GeoStruct(variograms=[
-    pyemu.geostats.SphVario(contribution=1.0, a=40*2)
+    pyemu.geostats.ExpVario(contribution=1.0, a=40*2)
 ])
 kv_mult_gs = pyemu.geostats.GeoStruct(variograms=[
-    pyemu.geostats.SphVario(contribution=1.0, a=93*3)
+    pyemu.geostats.ExpVario(contribution=1.0, a=93*2)
 ])
 
 # Per-PP-set config (locations are fixed here; values come from PEST later)
@@ -132,22 +132,6 @@ def model_to_grid_df(mf, xoff=0.0, yoff=0.0):
         "ibound": ibnd.ravel(),
     }).set_index("node")
     return df
-
-def write_pp_tpl(df, tpl_path, parnme_func):
-    """
-    Write a PEST/pyemu PP template file with columns:
-    name zone x y parval1
-    Values column is filled with $parameter_tokens$.
-    """
-    df = df.copy()
-    df["zone"] = df.get("zone", 0)
-    df["name"] = df["name"].astype(str)
-    df["parval1"] = [f"$ {parnme_func(r)} $" for _, r in df.iterrows()]
-    with open(tpl_path, "w") as f:
-        f.write("ptf $\n")
-        for _, r in df.iterrows():
-            # whitespace-delimited (no header)
-            f.write(f"{r['name']} {int(r['zone'])} {r['X']:.3f} {r['Y']:.3f} {r['parval1']}\n")
 
 def build_or_reuse_factors(pp_df_layer, gs, grid_X, grid_Y, out_fac_file, maxpts):
     """
@@ -268,6 +252,9 @@ tex_scale_init = dict(zip(tex_df.Texture, tex_df.Scale))
 # Collect mean neighbor distances for reporting
 nn_report = {}
 
+# Track PPs that end up in TPLs
+pp_cache = {}
+
 for tag, cfg in tqdm(PPSETS.items(), 'PP Set', total=len(PPSETS.keys())):
     # PP locations
     base_tag = tag.replace("_pp","")
@@ -292,6 +279,9 @@ for tag, cfg in tqdm(PPSETS.items(), 'PP Set', total=len(PPSETS.keys())):
         mask_keep = ~((pp_locs["Layer"] == 1) & (pp_locs["L2_status"] == "far"))
         pp_locs = pp_locs[mask_keep].copy()
         print(f"[{tag}] Dropped {before - len(pp_locs)} far Layer-2 pilot points")
+
+    # Store
+    pp_cache[tag] = pp_locs.copy()
 
     # --- Write PP templates: one per layer ---
     for k in range(layers):
@@ -369,43 +359,32 @@ init_dir = data_dir / "pp_init_csv"
 init_dir.mkdir(exist_ok=True, parents=True)
 
 for tag, cfg in tqdm(PPSETS.items(), 'PP Set', total=len(PPSETS.keys())):
-    pp_locs = gpd.read_file(cfg["shp"])
-    pp_locs["X"], pp_locs["Y"] = pp_locs.geometry.x, pp_locs.geometry.y
+    # use the filtered locations from earlier
+    pp_locs = pp_cache[tag].copy()
+
+    # ensure consistent, lower-case names (matches earlier)
+    base_tag = tag.replace("_pp","")
+    if "name" not in pp_locs.columns:
+        pp_locs["name"] = [
+            f"pp_{base_tag}_L{int(L)}_{i+1}"
+            for i, L in enumerate(pp_locs["Layer"].to_numpy())
+        ]
+    pp_locs["name"] = pp_locs["name"].str.lower()
 
     if tag == "scale_pp":
-        # duplicate across layers, same as you do earlier
-        locs = add_layer_column(pp_locs[["X","Y"]], layers).reset_index(drop=True)
-        locs["name"] = [f"pp_scale_L{int(L)}_{i+1}" for i, L in enumerate(locs["Layer"].to_numpy())]
-
-        for i, tex in enumerate(cfg["targets"]):
-            # do it per layer to match numbering
-            rows = []
-            for k in range(layers):
-                ppl = locs[locs["Layer"] == k].copy()
-                if ppl.empty:
-                    continue
+        rows = []
+        for k in range(layers):
+            ppl = pp_locs[pp_locs["Layer"] == k].copy()
+            if ppl.empty:
+                continue
+            for i, tex in enumerate(cfg["targets"]):
                 ppl_named = assign_parnmes(ppl, tag=tag, layer_idx=k, tex=tex)
-                rows.append(ppl_named)
-
-            out = pd.concat(rows, ignore_index=True)
-            out["parval1"] = 1.0
-            if i > 0:
-                out["parval1"] = tex_scale_init[tex] / tex_scale_init[texs[i-1]]
-
-            out[["name","parnme","pargp","X","Y","Layer","parval1"]].to_csv(
-                init_dir / f"init_{tag}_{tex}.csv", index=False
-            )
+                out = ppl_named.copy()
+                out["parval1"] = 1.0 if i == 0 else tex_scale_init[tex] / tex_scale_init[texs[i-1]]
+                rows.append(out[["name","parnme","pargp","X","Y","Layer","parval1"]])
+        pd.concat(rows, ignore_index=True).to_csv(init_dir / f"init_{tag}_all_textures.csv", index=False)
 
     else:
-        # respect optional 'layer' field if present
-        if "layer" in pp_locs.columns:
-            pp_locs = pp_locs.rename(columns={"layer":"Layer"})
-        else:
-            pp_locs["Layer"] = 0
-        pp_locs = pp_locs.reset_index(drop=True)
-        base_tag = tag.replace("_pp","")
-        pp_locs["name"] = [f"pp_{base_tag}_L{int(L)}_{i+1}" for i, L in enumerate(pp_locs["Layer"].to_numpy())]
-
         rows = []
         for k in range(layers):
             ppl = pp_locs[pp_locs["Layer"] == k].copy()
@@ -413,14 +392,12 @@ for tag, cfg in tqdm(PPSETS.items(), 'PP Set', total=len(PPSETS.keys())):
                 continue
             ppl_named = assign_parnmes(ppl, tag=tag, layer_idx=k)
             rows.append(ppl_named)
-
         out = pd.concat(rows, ignore_index=True)
         out["parval1"] = 0.0
         par = cfg["targets"][0]
         out[["name","parnme","pargp","X","Y","Layer","parval1"]].to_csv(
             init_dir / f"init_{tag}_{par}.csv", index=False
         )
-
 
 # ----------------------------------------------------------------------------------------------------------------------
 # Plot PP types by layer

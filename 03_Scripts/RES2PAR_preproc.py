@@ -1,9 +1,6 @@
 """
 Texture2Par "RES2PAR" Preprocessor
 """
-import matplotlib
-matplotlib.use('TkAgg')
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import flopy as fp

@@ -13,6 +13,7 @@ from pathlib import Path
 data_dir = Path('01_Data/')
 out_dir  = data_dir
 pest_dir = Path("04_PEST_setup")   # TPL, INS
+mf_dir = Path("02_Models/SVIHM_MF_working/MODFLOW/")
 
 streams = ['FJ','SCK','AS','BY']
 stream_files = ['FJ (USGS 11519500) Daily Flow, 1990-10-01_2025-08-31.csv',
@@ -629,14 +630,17 @@ uncert_hydrograph(fj_daily_sd, start='10/01/2020', end='10/01/2025', name='Fort 
 fj_daily_sd = weights_regime_equalized(fj_daily_sd)
 
 fj_obs = make_obs_table(sd_df=fj_daily_sd, gauge_id=streams[0], transform="log10")
+fj_obs['obsgnme'] = 'FJ'
 
 # Monthly volumes (sum of daily m³/d → m³/month) with ≥80% day coverage
 fj_month_vol = sim.make_obs_table_aggregate(gauge_id="FJ", freq='M', agg='sum')
 fj_month_vol['weight'] = 1 / fj_month_vol['obsstd']
+fj_month_vol['obsgnme'] = 'FJ_month_vol'
 
 # Annual volumes
 fj_year_vol = sim.make_obs_table_aggregate(gauge_id="FJ", freq='Y', agg='sum')
 fj_year_vol['weight'] = 1 / fj_year_vol['obsstd']
+fj_year_vol['obsgnme'] = 'FJ_year_vol'
 
 #----------------------------------------------------------------------------------------------------------------------#
 # Shackleford (SCK)
@@ -690,6 +694,7 @@ uncert_hydrograph(sck_daily_sd, start='10/01/2016', end='10/01/2018', name='Shac
 sck_daily_sd = weights_regime_equalized(sck_daily_sd)
 
 sck_obs = make_obs_table(sd_df=sck_daily_sd, gauge_id=streams[1], transform="log10")
+sck_obs['obsgnme'] = 'SCK'
 
 #----------------------------------------------------------------------------------------------------------------------#
 # Above Serpa Lane (AS)
@@ -736,6 +741,7 @@ uncert_hydrograph(as_daily_sd, name='Above Serpa Lane')
 as_daily_sd = weights_regime_equalized(as_daily_sd)
 
 as_obs = make_obs_table(sd_df=as_daily_sd, gauge_id=streams[2], transform="log10")
+as_obs['obsgnme'] = 'AS'
 
 #----------------------------------------------------------------------------------------------------------------------#
 # Below Young's Dam (BY)
@@ -782,11 +788,12 @@ uncert_hydrograph(by_daily_sd, name="Below Young's Dam")
 by_daily_sd = weights_regime_equalized(by_daily_sd)
 
 by_obs = make_obs_table(sd_df=by_daily_sd, gauge_id=streams[3], transform="log10")
+by_obs['obsgnme'] = 'BY'
 
 #----------------------------------------------------------------------------------------------------------------------#
 # Combine obs tables, write output file
 #----------------------------------------------------------------------------------------------------------------------#
-cols = ['obsnme', 'obsval', 'obsstd', 'weight']
+cols = ['obsnme', 'obsval', 'obsstd', 'weight','obsgnme']
 all_obs = pd.concat([fj_obs[cols], fj_month_vol[cols], fj_year_vol[cols], sck_obs[cols], as_obs[cols], by_obs[cols]], axis=0)
 
 all_obs.rename({'obsstd': 'standard_deviation'}, axis=1, inplace=True)
@@ -807,10 +814,10 @@ for stream in streams:
         f.write(f'l1 w !{stream}_RMSE!\n')
 
 # Write obs files so we can have per-stream stats as observation targets
-# fj_obs.to_csv(out_dir / 'FJ_log.csv', index=False)
-# sck_obs.to_csv(out_dir / 'SCK_log.csv', index=False)
-# as_obs.to_csv(out_dir / 'AS_log.csv', index=False)
-# by_obs.to_csv(out_dir / 'BY_log.csv', index=False)
+fj_obs.to_csv(mf_dir / 'FJ_log.csv', index=False)
+sck_obs.to_csv(mf_dir / 'SCK_log.csv', index=False)
+as_obs.to_csv(mf_dir / 'AS_log.csv', index=False)
+by_obs.to_csv(mf_dir / 'BY_log.csv', index=False)
 
 # Write VOLUME INS files
 fj_vol = pd.concat([fj_year_vol[['obsnme', 'obsval',]],
