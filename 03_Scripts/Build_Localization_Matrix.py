@@ -2,6 +2,8 @@ import numpy as np
 import pandas as pd
 import glob
 import os
+import geopandas as gpd
+from shapely.geometry import Point
 from collections import defaultdict
 from math import sqrt
 import pyemu
@@ -14,8 +16,9 @@ from tqdm import tqdm
 # Settings
 #----------------------------------------------------------------------------------------------------------------------#
 
-data_dir  = Path('01_Data')
+data_dir = Path('01_Data')
 pest_dir = Path("04_PEST_setup")
+gis_dir  = data_dir / 'GIS'
 
 # For various reasons, I'm not allowed to share this file with the well locations
 # Please contact me if you have any questions!
@@ -134,6 +137,13 @@ obs.loc[obs.index.str.contains('nse|kge|rmse'), 'obsval'] = 1.0
 obs.loc[obs.index.str.contains('nse|kge|rmse'), 'weight'] = 0.0
 
 #----------------------------------------------------------------------------------------------------------------------#
+# Separate out Quartz Valley using a shapefile
+#----------------------------------------------------------------------------------------------------------------------#
+
+qtz_gdf = gpd.read_file(gis_dir / 'quartz_valley_poly.shp')
+
+
+#----------------------------------------------------------------------------------------------------------------------#
 # Get those distances, build that matrix
 #----------------------------------------------------------------------------------------------------------------------#
 
@@ -145,6 +155,7 @@ obs_xy = (
     .rename(columns={'x_proj': 'x', 'y_proj': 'y'})
 )
 obs_xy.index = obs_xy.index.str.lower()  # to appease pyemu
+obs_xy['quartz'] = [qtz_gdf.contains(Point(x, y))[0] for x, y in obs_xy[["x", "y"]].to_numpy()]
 
 # Get parameters in a specific format
 pars_xy = (
@@ -153,6 +164,7 @@ pars_xy = (
     .set_index('parnme')
 )
 pars_xy.index = pars_xy.index.str.lower()  # to appease pyemu
+pars_xy['quartz'] = [qtz_gdf.contains(Point(x, y))[0] for x, y in pars_xy[["x", "y"]].to_numpy()]
 
 # Build KD-trees per param group for fast neighbor search
 group_to_pars = defaultdict(list)
@@ -252,6 +264,67 @@ glo_obs = [ob for ob in all_obs if ob not in obs_xy.index]
 oi = pyemu.Matrix.find_rowcol_indices(glo_obs, M.row_names, M.col_names, axis=0)
 M.x[oi, :] = 1.0
 
+#-- It gets complicated.
+ss_subs = ['str_','sbcm', 'catch_']
+semi_spatial_pars = [item for item in glo_par if any(sub in item for sub in ss_subs)]
+
+#-- Quartz Valley special rules
+glo_par_quartz = ['str_mult_shackleford', 'str_mult_mill', 'sbcm27', 'sbcm28', 'sbcm29', 'catch_mult_08', 'catch_mult_01',
+              'catch_mult_05', 'catch_mult_35', 'catch_mult_04', 'catch_mult_24']
+glo_obs_quartz = [obs for obs in glo_obs if obs.startswith('sck_')]
+glo_par_nonquartz = [par for par in semi_spatial_pars if par not in glo_par_quartz]
+glo_obs_nonquartz = [obs for obs in glo_obs if not (obs.startswith('sck_') or obs.startswith('fj_'))]
+q_obs_in_names  = obs_xy.index[obs_xy['quartz']].tolist() + glo_obs_quartz
+q_obs_out_names = obs_xy.index[~obs_xy['quartz']].tolist() + glo_obs_nonquartz
+q_par_in_names  = pars_xy.index[pars_xy['quartz']].tolist() + glo_par_quartz
+q_par_out_names = pars_xy.index[~pars_xy['quartz']].tolist() + glo_par_nonquartz
+
+# Convert to integer indices in M
+qoi  = pyemu.Matrix.find_rowcol_indices(q_obs_in_names,  M.row_names, M.col_names, axis=0)
+nqoi = pyemu.Matrix.find_rowcol_indices(q_obs_out_names, M.row_names, M.col_names, axis=0)
+qpi  = pyemu.Matrix.find_rowcol_indices(q_par_in_names,  M.row_names, M.col_names, axis=1)
+nqpi = pyemu.Matrix.find_rowcol_indices(q_par_out_names, M.row_names, M.col_names, axis=1)
+
+# observations inside quartz valley should only influence pars in quartz valley
+M.x[np.ix_(nqoi, qpi)] = 0.0  # obs outside, parameters inside
+M.x[np.ix_(qoi, nqpi)] = 0.0  # obs inside, parameters outside
+
+#-- Stream gauges should only influence streamflow, sfr k multipliers, catchment mult upstream
+
+# BY is the most upstream gauge
+by_catch_in = ['catch_mult_02', 'catch_mult_07', 'catch_mult_09', 'catch_mult_10', 'catch_mult_16', 'catch_mult_06',
+               'catch_mult_11', 'catch_mult_37', 'catch_mult_40', 'catch_mult_38','catch_mult_36']
+by_str_mult_in = ['str_mult_wildcat', 'str_mult_mcc_main', 'str_mult_mcc_branch', 'str_mult_miners', 'str_mult_french',
+                  'str_mult_clark']
+by_sbcm_in = ['sbcm01', 'sbcm02', 'sbcm03', 'sbcm04', 'sbcm05', 'sbcm06', 'sbcm07', 'sbcm08', 'sbcm09']
+
+glo_par_by = by_catch_in + by_str_mult_in + by_sbcm_in
+glo_par_nonby = [par for par in semi_spatial_pars if par not in glo_par_by]
+glo_obs_by = [obs for obs in glo_obs if obs.startswith('by_')]
+
+# Set BY obs to not influence downstream catchment/stream parameters
+byoi  = pyemu.Matrix.find_rowcol_indices(glo_obs_by,  M.row_names, M.col_names, axis=0)
+nbypi = pyemu.Matrix.find_rowcol_indices(glo_par_nonby, M.row_names, M.col_names, axis=1)
+M.x[np.ix_(byoi, nbypi)] = 0.0  # by obs, parameters downstream
+
+# AS is the next gauge downstream, pretty central, but on the main branch of the Scott
+as_catch_out = ['catch_mult_08', 'catch_mult_01', 'catch_mult_05', 'catch_mult_35', 'catch_mult_04', 'catch_mult_24',
+                'catch_mult_31', 'catch_mult_28', 'catch_mult_15', 'catch_mult_42', 'catch_mult_18', 'catch_mult_39',
+                'catch_mult_12', 'catch_mult_20', 'catch_mult_29', 'catch_mult_19', 'catch_mult_21', 'catch_mult_14',
+                'catch_mult_23', 'catch_mult_22']
+as_catch_in = [item for item in semi_spatial_pars if (item.startswith('catch_') and item not in as_catch_out)]
+as_str_mult_in =  by_str_mult_in + ['str_mult_etna', 'str_mult_hearts', 'str_mult_shell']
+as_sbcm_in = by_sbcm_in + ['sbcm10', 'sbcm11', 'sbcm12', 'sbcm13']
+
+glo_par_as = as_catch_in + as_str_mult_in + as_sbcm_in
+glo_par_nonas = [par for par in semi_spatial_pars if par not in glo_par_as]
+glo_obs_as = [obs for obs in glo_obs if obs.startswith('as_')]
+
+# Set AS obs to not influence downstream catchment/stream parameters
+asoi  = pyemu.Matrix.find_rowcol_indices(glo_obs_as,  M.row_names, M.col_names, axis=0)
+naspi = pyemu.Matrix.find_rowcol_indices(glo_par_nonas, M.row_names, M.col_names, axis=1)
+M.x[np.ix_(asoi, naspi)] = 0.0  # by obs, parameters downstream
+
 # Write SPARSE binary localizer (rectangular)
 out_path = pest_dir / "localizer.jcb"
 M.to_coo(out_path)
@@ -264,7 +337,8 @@ import matplotlib
 matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
 
-def qa_plot_obs_influence(obs_name, M, obs_xy, pars_xy, wmin=1e-6, annotate_top=0, print_top=0, figsize=(8,7)):
+def qa_plot_obs_influence(obs_name, M, obs_xy, pars_xy, wmin=1e-6, annotate_top=0, print_top=0, figsize=(8,7),
+                          return_df = False):
     rn = [n.lower() for n in M.row_names]
     cn = [n.lower() for n in M.col_names]
     o = obs_name
@@ -296,9 +370,17 @@ def qa_plot_obs_influence(obs_name, M, obs_xy, pars_xy, wmin=1e-6, annotate_top=
     if print_top and n_pos>0:
         print(df.sort_values('w', ascending=False).head(print_top))
     plt.tight_layout()
+    if return_df:
+        return df
 
-
-# Tests
+# HDS Tests
 qa_plot_obs_influence("d31_avg", M, obs_xy, pars_xy, wmin=0.01)
 qa_plot_obs_influence("qv04_avg", M, obs_xy, pars_xy, wmin=0.01)
 qa_plot_obs_influence("st201_avg", M, obs_xy, pars_xy, wmin=0.01)
+qa_plot_obs_influence("scv_11_avg", M, obs_xy, pars_xy, wmin=0.01)
+
+# Stream tests
+qa_plot_obs_influence("fj_2019-02_vol", M, obs_xy, pars_xy, wmin=0.01)  # should be everything
+
+# Shackleford Creek
+qa_plot_obs_influence("sck_20071203", M, obs_xy, pars_xy, wmin=0.01)

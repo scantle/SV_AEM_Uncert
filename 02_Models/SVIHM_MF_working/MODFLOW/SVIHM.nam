@@ -51,6 +51,6 @@ DATA 401 Streamflow_Farmers_Div_SVIHM.dat
 DATA 402 Streamflow_SVID_Div_SVIHM.dat
 DATA 403 Streamflow_BY_SVIHM.dat
 DATA 404 Streamflow_AS_SVIHM.dat
-DATA 405 Streamflow_LS_SVIHM.dat
+DATA 405 Streamflow_SCK_SVIHM.dat
 DATA 500 HobData_SVIHM.dat
 Data 501 Reduced_Wells.dat

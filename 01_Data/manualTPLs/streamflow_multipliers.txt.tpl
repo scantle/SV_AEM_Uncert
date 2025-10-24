@@ -11,7 +11,7 @@ French_Avg_Flow_m3day $ str_mult_french $
 Clark_Avg_Flow_m3day $ str_mult_clark $
 Etna_Avg_Flow_m3day $ str_mult_etna $
 Heartstrand_Avg_Flow_m3day $ str_mult_hearts $
-Shell_Avg_Flow_m3day $ str_mult_shall $
+Shell_Avg_Flow_m3day $ str_mult_shell $
 Hamlin_Avg_Flow_m3day $ str_mult_hamlin $
 Johnson_Avg_Flow_m3day $ str_mult_johnson $
 Crystal_Avg_Flow_m3day $ str_mult_crystal $
