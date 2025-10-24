@@ -295,7 +295,7 @@ def build_head_obs_sets_weighted(
     sumw = d.groupby("wellid", as_index=False)[weight_col].sum().rename(columns={weight_col: "sumw"})
     avg_rows = meta_complete.merge(sumw, on="wellid", how="left")
     avg_rows["obsnme"] = avg_rows["wellid"] + "_AVG"
-    avg_rows["group"]  = "AVG_HEAD"
+    avg_rows["group"]  = "hds_avg"
     avg_rows["obval"]  = avg_rows["well_wmean"]
     avg_rows["stdev"]  = avg_rows["sigma_mean"]
     # AVG weight: cap at 1.0; wells with sumw==0 get 0 weight
@@ -308,7 +308,7 @@ def build_head_obs_sets_weighted(
     # ---------- DIFF_HEAD ----------
     d["diff_from_mean"] = d[value_col] - d["well_wmean"]
     d["obsnme_dm"]      = d["obsnme"].astype(str) + "_DM"
-    d["group_dm"]       = "DIFF_HEAD"
+    d["group_dm"]       = "hds_diff"
     # DIFF stdev: sqrt(base_sigma^2 + sigma_mean^2)
     d["stdev_dm"] = np.sqrt(base_sigma**2 + np.where(np.isnan(d["sigma_mean"]), 0.0, d["sigma_mean"]**2))
 
@@ -339,7 +339,7 @@ def build_head_obs_sets_weighted(
         m["stdev"]  = base_sigma * np.sqrt(2.0)
         m = m.reset_index(drop=True)
         m["obsnme"] = [f"{top_well}_VD.{i}" for i in m.index]
-        m["group"]  = "VDIFF"
+        m["group"]  = "hds_vdiff"
         m["wellid"] = top_well
         m = m.rename(columns={time_key: "date"})
         vdiff_list.append(m[["obsnme", "group", "obval", "stdev", "weight", "wellid", "date"]].copy())

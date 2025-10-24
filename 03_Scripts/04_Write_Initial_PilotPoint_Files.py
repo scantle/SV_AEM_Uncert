@@ -42,6 +42,7 @@ boundary_threshold = 250.0  # meters
 
 # Textures (for scale_pp parameters)
 texs = ['Fine', 'Mixed_Fine', 'Sand', 'Mixed_Coarse', 'Very_Coarse']
+tex_short = ['1FF', '2MF', '3SC', '3MC', '4VC']
 
 # Variograms (one GeoStruct per PP-type)
 scale_gs = pyemu.geostats.GeoStruct(variograms=[
@@ -291,9 +292,9 @@ for tag, cfg in tqdm(PPSETS.items(), 'PP Set', total=len(PPSETS.keys())):
 
         if tag == "scale_pp":
             # one template per texture per layer
-            for tex in cfg["targets"]:
+            for i, tex in enumerate(cfg["targets"]):
                 tpl_path = out_dir / cfg['tpl_pattern'].format(lay=k + 1, tex=tex)
-                ppl_named = assign_parnmes(ppl, tag=tag, layer_idx=k, tex=tex)
+                ppl_named = assign_parnmes(ppl, tag=tag, layer_idx=k, tex=tex_short[i])
                 write_pp_tpl(ppl_named, tpl_path)
                 print(f"[tpl] wrote {tpl_path}")
         else:
@@ -378,7 +379,7 @@ for tag, cfg in tqdm(PPSETS.items(), 'PP Set', total=len(PPSETS.keys())):
             if ppl.empty:
                 continue
             for i, tex in enumerate(cfg["targets"]):
-                ppl_named = assign_parnmes(ppl, tag=tag, layer_idx=k, tex=tex)
+                ppl_named = assign_parnmes(ppl, tag=tag, layer_idx=k, tex=tex_short[i])
                 out = ppl_named.copy()
                 out["parval1"] = 1.0 if i == 0 else tex_scale_init[tex] / tex_scale_init[texs[i-1]]
                 rows.append(out[["name","parnme","pargp","X","Y","Layer","parval1"]])

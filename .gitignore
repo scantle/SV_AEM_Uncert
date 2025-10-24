@@ -195,3 +195,5 @@ cython_debug/
 
 # Custom to ignore intermediate output
 04_Pest_setup/*
+*.fac
+05_Plots/*

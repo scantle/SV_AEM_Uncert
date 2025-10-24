@@ -1,11 +1,14 @@
 import numpy as np
 import pandas as pd
+import glob
+import os
 from collections import defaultdict
 from math import sqrt
 import pyemu
 from sklearn.neighbors import KDTree  # fast radius queries
 from pathlib import Path
 from tqdm import tqdm
+
 
 #----------------------------------------------------------------------------------------------------------------------#
 # Settings
@@ -32,7 +35,8 @@ PP_GS = {
 
 # Parameters for localization kernel
 # max multiple of horizontal range to search, correlation threshold to keep
-R_MULT = 3.0          # search radius = R_MULT * ah
+R_MULT = 4.0          # search radius = R_MULT * ah
+SCALE_R_MULT = 2.0    # search radius for scale params (have a long range already...)
 RHO_MIN = 0.01        # prune tiny weights
 USE_SQUARED = False   # optionally square rho for tighter localization
 
@@ -83,6 +87,51 @@ pp_pars = pd.concat(pp_init_dfs)
 hob_df = hob_obs.merge(hob_key, how='left', left_on='wellid', right_on='well_id')
 if hob_df[hob_df[['x_proj', 'y_proj']].isna().any(axis=1)].shape[0] > 0:
     print('Error - still missing coordinates!')
+
+# Read in TPL files to get remaining parameters
+# Template files with parameters => IN files
+tpl_files = [item for item in glob.glob( '04_PEST_setup/*.tpl') if 'svihmt2p' not in item]
+in_files = []
+for f in tpl_files:  # Where they get written by PEST
+    in_file = f.removesuffix('.tpl')
+    if in_file in ['t2p_par2par.in', 'sfr2par.in']:
+        in_files.append('SVIHM/' + in_file)
+    elif in_file in ['catchment_mult.txt','landcover_table.txt','streamflow_multipliers.txt']:
+        in_files.append('SVIHM/SWBM/' + in_file)
+    else:  # most
+        in_files.append('SVIHM/preproc/' + in_file)
+
+# Instruction files with observations
+ins_files = sorted(glob.glob("04_PEST_setup/*.ins"))
+out_files = []
+for f in ins_files:  # overcomplicated this for myself
+    out_file = f.removesuffix('.ins')
+    if out_file=='Streamflow_FJ_SVIHM_VOL':
+        out_files.append('SVIHM/MODFLOW/' + out_file + '.out')
+    elif out_file=='head_obs_reader':
+        out_files.append('SVIHM/MODFLOW/' + 'head_obs_for_pest.out')
+    else:
+        out_files.append('SVIHM/MODFLOW/' + out_file + '.dat')
+
+pst = pyemu.Pst.from_io_files(tpl_files=tpl_files, in_files=in_files,
+                              ins_files=ins_files, out_files=out_files,
+                              pst_filename='temp.pst')
+os.remove('temp.pst')  # immediate cleanup :)
+
+# It would be much simpler to read in the PST file but that would create a circular dependency...
+# so alas... update the pst object with the head weights
+hob_obs = pd.read_csv(data_dir / 'head_obs_master.csv', index_col='obsnme')
+hob_obs = hob_obs.rename({'obval': 'obsval', 'group': 'obgnme', 'stdev': 'standard_deviation'}, axis=1)
+obs = pst.observation_data
+for df in [hob_obs]:
+    df.index = df.index.str.lower()
+    for col in ["obsval","weight","obgnme", "standard_deviation"]:
+        if col in df.columns:
+            obs.loc[obs.index.intersection(df.index), col] = df.loc[obs.index.intersection(df.index), col]
+
+# Stream NSE/KGE/RMSE not in observations
+obs.loc[obs.index.str.contains('nse|kge|rmse'), 'obsval'] = 1.0
+obs.loc[obs.index.str.contains('nse|kge|rmse'), 'weight'] = 0.0
 
 #----------------------------------------------------------------------------------------------------------------------#
 # Get those distances, build that matrix
@@ -136,7 +185,11 @@ for oi in tqdm(range(obs_coords.shape[0]), desc="Computing localizer"):
             continue
         g_struct = groupto_struct(g)
         ah = float(g_struct['ah'])
-        r_search = R_MULT * ah
+        if g.startswith('scale'):
+            # reign that crazy range in
+            r_search = SCALE_R_MULT * ah
+        else:
+            r_search = R_MULT * ah
 
         # query neighbors
         idxs = tree.query_radius(np.array([[ox, oy]]), r=r_search, return_distance=False)[0]
@@ -173,21 +226,36 @@ if len(trip_vals) == 0:
 
 # Assemble into a pyemu Matrix and write to PEST++ matrix format
 
-# Get the full row/col name sets (PEST++ requires full dimensions)
-all_obs = obs_names.tolist()
-all_pars = pars_xy.index.tolist()
-
+# Build the full matrix with zeros everywhere else
+all_obs = pst.nnz_obs_names  # obs_xy.index.tolist()
+all_pars = pst.adj_par_names  # pars_xy.index.tolist()
 M = pyemu.Matrix.from_names(row_names=all_obs, col_names=all_pars, isdiagonal=False)
 
-# Map (row_name, col_name) -> integer indices efficiently
+# Map triplets to indices once (fast)
 ri = pyemu.Matrix.find_rowcol_indices(trip_rows, M.row_names, M.col_names, axis=0)
 ci = pyemu.Matrix.find_rowcol_indices(trip_cols, M.row_names, M.col_names, axis=1)
-M.x[ri, ci] = trip_vals  # assign nonzeros
 
-# Write the matrix for PEST++-IES
-loc_df = pd.DataFrame(M.x, index=M.row_names, columns=M.col_names)
-loc_path = pest_dir / "localizer.csv"
-loc_df.to_csv(loc_path)
+# Assign nonzeros; clip to [0,1] just in case
+#vals = np.asarray(trip_vals, float)
+#vals = np.clip(vals, 0.0, 1.0)
+
+# forget all that complication, set all non-zero values to 1 so the auto-localizer isn't constrained
+M.x[ri, ci] = 1.0  #vals
+
+# Assign non-spatial ("global") parameters to influence all observations
+glo_par = [par for par in all_pars if par not in pars_xy.index]
+gi = pyemu.Matrix.find_rowcol_indices(glo_par, M.row_names, M.col_names, axis=1)
+M.x[:, gi] = 1.0
+
+# Make sure non-spatial (streamflow) observations can be influenced by parameters
+glo_obs = [ob for ob in all_obs if ob not in obs_xy.index]
+oi = pyemu.Matrix.find_rowcol_indices(glo_obs, M.row_names, M.col_names, axis=0)
+M.x[oi, :] = 1.0
+
+# Write SPARSE binary localizer (rectangular)
+out_path = pest_dir / "localizer.jcb"
+M.to_coo(out_path)
+print(f"Wrote sparse localizer to {out_path}")
 
 #----------------------------------------------------------------------------------------------------------------------#
 # QA/QC
@@ -231,6 +299,6 @@ def qa_plot_obs_influence(obs_name, M, obs_xy, pars_xy, wmin=1e-6, annotate_top=
 
 
 # Tests
-qa_plot_obs_influence("d31_avg", M, obs_xy, pars_xy, wmin=0.01, print_top=100)
-qa_plot_obs_influence("qv04_avg", M, obs_xy, pars_xy, wmin=0.01, print_top=20)
-qa_plot_obs_influence("st201_avg", M, obs_xy, pars_xy, wmin=0.01, print_top=20)
+qa_plot_obs_influence("d31_avg", M, obs_xy, pars_xy, wmin=0.01)
+qa_plot_obs_influence("qv04_avg", M, obs_xy, pars_xy, wmin=0.01)
+qa_plot_obs_influence("st201_avg", M, obs_xy, pars_xy, wmin=0.01)

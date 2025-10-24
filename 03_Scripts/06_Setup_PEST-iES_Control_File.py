@@ -210,131 +210,6 @@ def bound_pressure_report(pst, pe, top_k=15):
         print("No out-of-bounds draws.")
 
 #----------------------------------------------------------------------------------------------------------------------#
-
-def group_weight_sums(obs_df: pd.DataFrame, groups=None, subset=None, group_col="obgnme", weight_col="weight"):
-    """
-    Return a Series of sum of weights per observation group.
-    - groups: optional iterable of group names to include; if None, include all present
-    - subset: optional boolean mask or index of obs to include in sums (others ignored)
-    """
-    if group_col not in obs_df or weight_col not in obs_df:
-        raise KeyError(f"obs_df must contain columns '{group_col}' and '{weight_col}'")
-    df = obs_df[[group_col, weight_col]].copy()
-
-    if subset is not None:
-        if isinstance(subset, (pd.Series, np.ndarray, list, tuple)):
-            df = df.loc[obs_df.index[subset]] if (isinstance(subset, pd.Series) and subset.dtype==bool) else df.loc[subset]
-        else:
-            raise ValueError("subset must be a boolean Series/array aligned to obs_df or an index-like of obsnme")
-
-    if groups is not None:
-        df = df[df[group_col].isin(set(groups))]
-
-    return df.groupby(group_col, dropna=False)[weight_col].sum().sort_index()
-
-#----------------------------------------------------------------------------------------------------------------------#
-
-def balance_group_weights(
-    obs_df: pd.DataFrame,
-    groups=None,
-    subset=None,
-    target_sum: float | None = None,
-    group_col="obgnme",
-    weight_col="weight",
-    inplace: bool = True,
-):
-    """
-    Rebalance weights across groups while preserving within-group relative weights.
-
-    Args
-    ----
-    obs_df : DataFrame with columns [group_col, weight_col]
-    groups : iterable of group names to balance; if None -> all groups present in obs_df
-    subset : optional boolean mask or index of obs that are eligible to be scaled;
-             other observations (even in the same group) remain unchanged.
-    target_sum : if None -> each group's new sum becomes the *average* of the current sums
-                 if provided:
-                     - if >= total groups target: treated as the *total* to split equally among groups
-                     - if <  total groups target: treated as the *per-group* target (applied to all)
-    inplace : modify obs_df in place (default True). Returns the modified DF either way.
-
-    Returns
-    -------
-    (df, info) where:
-      - df is the DataFrame with adjusted weights
-      - info is a dict with 'before', 'after', and 'scales' Series (per group)
-    """
-    if group_col not in obs_df or weight_col not in obs_df:
-        raise KeyError(f"obs_df must contain columns '{group_col}' and '{weight_col}'")
-
-    df = obs_df if inplace else obs_df.copy()
-
-    # Build a working view + eligibility mask
-    all_groups = df[group_col].dropna().unique().tolist()
-    target_groups = set(all_groups) if groups is None else set(groups)
-    if not target_groups:
-        raise ValueError("No groups selected to balance.")
-
-    if subset is None:
-        eligible_mask = df[group_col].isin(target_groups)
-    else:
-        # subset can be boolean mask aligned to df.index, or list/Index of obsnme
-        if isinstance(subset, pd.Series) and subset.dtype == bool:
-            eligible_mask = subset & df[group_col].isin(target_groups)
-        elif isinstance(subset, (np.ndarray, list, tuple, pd.Index)):
-            eligible_mask = df.index.isin(subset) & df[group_col].isin(target_groups)
-        else:
-            raise ValueError("subset must be a boolean Series/array aligned to obs_df or an index-like of obsnme")
-
-    # Current sums (only counting eligible obs within each group)
-    before = df.loc[eligible_mask].groupby(group_col)[weight_col].sum().reindex(sorted(target_groups)).fillna(0.0)
-
-    if len(before) == 0:
-        raise ValueError("No eligible observations found in the selected groups.")
-
-    # Decide the per-group target
-    if target_sum is None:
-        per_group_target = before.mean()
-    else:
-        # If target_sum looks like a total (>= sum of current per-group means), split equally.
-        # Otherwise treat as per-group target directly.
-        if target_sum >= before.sum():
-            per_group_target = target_sum / len(before)
-        else:
-            per_group_target = float(target_sum)
-
-    # Compute scale factors per group; handle zeros safely
-    scales = pd.Series(index=before.index, dtype=float)
-    for g, s in before.items():
-        if s <= 0.0:
-            # If a group has zero eligible weight, set scale=1.0 (no change)
-            # and warn via scales value = np.nan to signal "unchanged"
-            scales.loc[g] = np.nan
-        else:
-            scales.loc[g] = per_group_target / s
-
-    # Apply scaling *only* to eligible obs, preserving within-group relative weights
-    elig = df.loc[eligible_mask, [group_col, weight_col]].copy()
-    # Map scale to each eligible row
-    row_scales = elig[group_col].map(scales).to_numpy()
-    # Keep rows with nan scale unchanged
-    keep = np.isnan(row_scales)
-    new_w = elig[weight_col].to_numpy()
-    new_w[~keep] = new_w[~keep] * row_scales[~keep]
-    df.loc[eligible_mask, weight_col] = new_w
-
-    after = df.loc[eligible_mask].groupby(group_col)[weight_col].sum().reindex(before.index).fillna(0.0)
-
-    info = {
-        "before": before,
-        "after": after,
-        "per_group_target": per_group_target,
-        "scales": scales,  # per-group multiplicative factors used (NaN = unchanged)
-        "eligible_counts": df.loc[eligible_mask].groupby(group_col).size().reindex(before.index).fillna(0).astype(int),
-    }
-    return (df, info)
-
-#----------------------------------------------------------------------------------------------------------------------#
 # Read in necessary model files, setup spatial reference
 #----------------------------------------------------------------------------------------------------------------------#
 
@@ -464,7 +339,7 @@ for df in [sfr_obs, hob_obs]:
 obs.loc[obs.index.str.contains('nse|kge|rmse'), 'obsval'] = 1.0
 obs.loc[obs.index.str.contains('nse|kge|rmse'), 'weight'] = 0.0
 obs.loc[obs.index.str.contains('nse|kge|rmse'), 'standard_deviation'] = 0.0
-obs.loc[obs.index.str.contains('nse|kge|rmse'), 'obgnme'] = 'str_metrics'
+obs.loc[obs.index.str.contains('nse|kge|rmse'), 'obgnme'] = 'metrics'
 obs_updated += obs.index.str.contains('nse|kge|rmse').sum()
 
 print(f'Updated {obs_updated} / {obs.shape[0]} obs in PST, and {sfr_obs.shape[0]+hob_obs.shape[0]} in CSVs')
@@ -473,31 +348,6 @@ print(f'Updated {obs_updated} / {obs.shape[0]} obs in PST, and {sfr_obs.shape[0]
 if obs.loc[obs.standard_deviation.isna(), :].count().max() > 0:
     print('Not all observations set...')
     print(obs.loc[obs.standard_deviation.isna(), :])
-
-# Onto weights...
-print('Before balancing...')
-group_weight_sums(obs)
-
-# Assign metagroup labels
-metagroup_mapping = {'AS': 'STREAMFLOW',
-                     'AVG_HEAD': 'HEADS',
-                     'BY': 'STREAMFLOW',
-                     'DIFF_HEAD': 'HEADS',
-                     'FJ': 'STREAMFLOW',
-                     'FJ_month_vol': 'STREAMVOL',
-                     'FJ_year_vol': 'STREAMVOL',
-                     'SCK': 'STREAMFLOW',
-                     'STAT': 'STAT',
-                     'VDIFF': 'HEADS',
-                     'str_metrics': 'STAT',
-}
-obs["metagroup"] = obs["obgnme"].map(metagroup_mapping)
-_, info = balance_group_weights(obs, groups=['STREAMFLOW','HEADS'], group_col='metagroup')
-print("Meta Before:\n", info["before"])
-print("Meta After:\n", info["after"])
-
-print('After balancing...')
-group_weight_sums(obs)
 
 #----------------------------------------------------------------------------------------------------------------------#
 # Parameter Initial Values & Groups
@@ -518,11 +368,11 @@ print(f'Updated {pp_updated} / {pp_pars.shape[0]} pars in PP CSVs')
 
 # Pilot point transforms, bounds (by group)
 par.loc[par.index.intersection(pp_pars.index), 'partrans'] = 'none'
-par.loc[par.pargp=='aem_var', ['parlbnd','parubnd']] = (0.0, 25.0)
+par.loc[par.pargp=='aem_var', ['parlbnd','parubnd']] = (0.0, 5.0)
 par.loc[par.pargp=='lth_var', ['parlbnd','parubnd']] = (0.0, 5.0)
 par.loc[par.pargp=='kv_mult', ['parlbnd','parubnd']] = (-3.0, 3.0)
 par.loc[par.pargp.str.contains('scale'), ['parlbnd','parubnd']] = (1.1, 3.3)
-par.loc[par.pargp.str.contains('scale_Fine'), ['parlbnd','parubnd']] = (0.5, 1.5)
+par.loc[par.pargp.str.contains('scale_1FF'), ['parlbnd','parubnd']] = (0.5, 1.5)
 
 # Catchment, streamflow multipliers
 wtr_updated = 0
@@ -545,22 +395,43 @@ print(f'In total, {pp_updated + par_updated + wtr_updated} / {par.shape[0]} para
 t2p_par2par_frompar(par)
 
 #----------------------------------------------------------------------------------------------------------------------#
+# Weight balancing
+#----------------------------------------------------------------------------------------------------------------------#
+
+nz = obs.loc[obs['weight'] > 0, 'obgnme'].astype(str).values
+tags = pd.unique(pd.Series([item.split('_')[0] for item in nz]))
+factor_df = pd.DataFrame({'weight': 0.0}, index=tags)
+factor_df.loc['hds', 'weight'] = 0.40
+factor_df.loc['str', 'weight'] = 0.35
+factor_df.loc['vol', 'weight'] = 0.25
+
+# Make sure we got em all...
+if factor_df['weight'].min() <= 0:
+    print('Not all factor weights set...')
+if factor_df['weight'].sum() > 1:
+    print('Factor weights add up too high!')
+
+# write it out
+factor_df.to_csv('factor_weights.dat', header=False)
+pst.pestpp_options["ies_phi_factor_file"] = "factor_weights.dat"
+
+#----------------------------------------------------------------------------------------------------------------------#
 # Parameter Covariance
 #----------------------------------------------------------------------------------------------------------------------#
 
 # build full cov with PP blocks
 full_cov = build_full_cov_with_pp_blocks(pst, pp_pars)
-# full_cov.to_binary(work_dir / "parcov.jcb")  # Can't take names with 20+ characters!
-# pst.pestpp_options["parcov"] = "parcov.jcb"
+full_cov.to_coo("parcov.jcb")  # Can't take names with 20+ characters!
+pst.pestpp_options["parcov"] = "parcov.jcb"
 
-full_cov.to_ascii(work_dir / "parcov.cov")
-pst.pestpp_options["parcov"] = "parcov.cov"
+# full_cov.to_ascii(work_dir / "parcov.cov")
+# pst.pestpp_options["parcov"] = "parcov.cov"
 
 pe = pyemu.ParameterEnsemble.from_gaussian_draw(pst, cov=full_cov, num_reals=ensemble_size)
 pe.enforce(how="reset")
 #bound_pressure_report(pst, pe)
 
-pe.to_csv(work_dir / "prior_pe.csv")
+pe.to_csv("prior_pe.csv")
 pst.pestpp_options["ies_parameter_ensemble"] = "prior_pe.csv"
 pst.pestpp_options["ies_num_reals"] = ensemble_size
 
@@ -574,10 +445,11 @@ pst.pestpp_options["ies_include_base"] = True
 pst.pestpp_options['ies_reg_factor'] = 0.05  #
 pst.pestpp_options["ies_bad_phi_sigma"] = 2.0  # middle ground value
 pst.pestpp_options["ies_num_threads"] = 8
+pst.pestpp_options['ies_csv_by_reals'] = False  # realizations in columns
 pst.control_data.noptmax = -2
 
 # Localization
-pst.pestpp_options["ies_localizer"] = "localizer.csv"
+pst.pestpp_options["ies_localizer"] = "localizer.jcb"
 pst.pestpp_options["ies_autoadaloc"] = True
 pst.pestpp_options["ies_autoadaloc_sigma_dist"] = 2
 

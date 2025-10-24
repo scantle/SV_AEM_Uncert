@@ -630,17 +630,17 @@ uncert_hydrograph(fj_daily_sd, start='10/01/2020', end='10/01/2025', name='Fort 
 fj_daily_sd = weights_regime_equalized(fj_daily_sd)
 
 fj_obs = make_obs_table(sd_df=fj_daily_sd, gauge_id=streams[0], transform="log10")
-fj_obs['obsgnme'] = 'FJ'
+fj_obs['obsgnme'] = 'str_FJ'
 
 # Monthly volumes (sum of daily m³/d → m³/month) with ≥80% day coverage
 fj_month_vol = sim.make_obs_table_aggregate(gauge_id="FJ", freq='M', agg='sum')
 fj_month_vol['weight'] = 1 / fj_month_vol['obsstd']
-fj_month_vol['obsgnme'] = 'FJ_month_vol'
+fj_month_vol['obsgnme'] = 'vol_FJ_month'
 
 # Annual volumes
 fj_year_vol = sim.make_obs_table_aggregate(gauge_id="FJ", freq='Y', agg='sum')
 fj_year_vol['weight'] = 1 / fj_year_vol['obsstd']
-fj_year_vol['obsgnme'] = 'FJ_year_vol'
+fj_year_vol['obsgnme'] = 'vol_FJ_year'
 
 #----------------------------------------------------------------------------------------------------------------------#
 # Shackleford (SCK)
@@ -694,7 +694,7 @@ uncert_hydrograph(sck_daily_sd, start='10/01/2016', end='10/01/2018', name='Shac
 sck_daily_sd = weights_regime_equalized(sck_daily_sd)
 
 sck_obs = make_obs_table(sd_df=sck_daily_sd, gauge_id=streams[1], transform="log10")
-sck_obs['obsgnme'] = 'SCK'
+sck_obs['obsgnme'] = 'str_SCK'
 
 #----------------------------------------------------------------------------------------------------------------------#
 # Above Serpa Lane (AS)
@@ -741,7 +741,7 @@ uncert_hydrograph(as_daily_sd, name='Above Serpa Lane')
 as_daily_sd = weights_regime_equalized(as_daily_sd)
 
 as_obs = make_obs_table(sd_df=as_daily_sd, gauge_id=streams[2], transform="log10")
-as_obs['obsgnme'] = 'AS'
+as_obs['obsgnme'] = 'str_AS'
 
 #----------------------------------------------------------------------------------------------------------------------#
 # Below Young's Dam (BY)
@@ -788,7 +788,7 @@ uncert_hydrograph(by_daily_sd, name="Below Young's Dam")
 by_daily_sd = weights_regime_equalized(by_daily_sd)
 
 by_obs = make_obs_table(sd_df=by_daily_sd, gauge_id=streams[3], transform="log10")
-by_obs['obsgnme'] = 'BY'
+by_obs['obsgnme'] = 'str_BY'
 
 #----------------------------------------------------------------------------------------------------------------------#
 # Combine obs tables, write output file
