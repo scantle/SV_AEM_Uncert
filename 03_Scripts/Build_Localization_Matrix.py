@@ -7,7 +7,7 @@ from shapely.geometry import Point
 from collections import defaultdict
 from math import sqrt
 import pyemu
-from sklearn.neighbors import KDTree  # fast radius queries
+from sklearn.neighbors import KDTree
 from pathlib import Path
 from tqdm import tqdm
 

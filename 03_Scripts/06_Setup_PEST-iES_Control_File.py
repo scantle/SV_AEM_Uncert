@@ -376,10 +376,10 @@ par.loc[par.pargp.str.contains('scale_1FF'), ['parlbnd','parubnd']] = (0.5, 1.5)
 
 # Catchment, streamflow multipliers
 wtr_updated = 0
-par.loc[par.parnme.str.contains('catch_mult'),['parval1','parlbnd','parubnd','pargp']] = (0.5, 0.1, 1.0, 'catch_mult')
-par.loc[par.parnme.str.contains('str_mult'),['parval1','parlbnd','parubnd','pargp']] = (1.0, 0.1, 1.0, 'str_mult')
-wtr_updated += par.loc[par.parnme.str.contains('catch_mult')].shape[0] + par.loc[par.parnme.str.contains('str_mult')].shape[0]
-print(f'Updated {wtr_updated} catchment/str mult using default values')
+#par.loc[par.parnme.str.contains('catch_mult'),['parval1','parlbnd','parubnd','pargp']] = (0.5, 0.1, 1.0, 'catch_mult')
+#par.loc[par.parnme.str.contains('str_mult'),['parval1','parlbnd','parubnd','pargp']] = (1.0, 0.1, 1.0, 'str_mult')
+#wtr_updated += par.loc[par.parnme.str.contains('catch_mult')].shape[0] + par.loc[par.parnme.str.contains('str_mult')].shape[0]
+#print(f'Updated {wtr_updated} catchment/str mult using default values')
 
 # Previous parameters (overwrite any previously set values)
 par_updated = 0
