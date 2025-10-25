@@ -303,14 +303,14 @@ for f in tpl_files:  # Where they get written by PEST
 # Instruction files with observations
 ins_files = sorted(glob.glob("*.ins"))
 out_files = []
-for f in ins_files:  # overcomplicated this for myself
+for f in ins_files:
     out_file = f.removesuffix('.ins')
-    if out_file=='Streamflow_FJ_SVIHM_VOL':
-        out_files.append('SVIHM/MODFLOW/' + out_file + '.out')
-    elif out_file=='head_obs_reader':
+#    if out_file=='Streamflow_FJ_SVIHM_VOL':
+#        out_files.append('SVIHM/MODFLOW/' + out_file + '.out')
+    if out_file=='head_obs_reader':
         out_files.append('SVIHM/MODFLOW/' + 'head_obs_for_pest.out')
     else:
-        out_files.append('SVIHM/MODFLOW/' + out_file + '.dat')
+        out_files.append('SVIHM/MODFLOW/' + out_file + '.out')
 
 pst = pyemu.Pst.from_io_files(tpl_files=tpl_files, in_files=in_files,
                               ins_files=ins_files, out_files=out_files,
@@ -445,7 +445,6 @@ pst.pestpp_options["ies_include_base"] = True
 pst.pestpp_options['ies_reg_factor'] = 0.05  #
 pst.pestpp_options["ies_bad_phi_sigma"] = 2.0  # middle ground value
 pst.pestpp_options["ies_num_threads"] = 8
-pst.pestpp_options['ies_csv_by_reals'] = False  # realizations in columns
 pst.control_data.noptmax = -2
 
 # Localization

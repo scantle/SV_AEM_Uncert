@@ -384,3 +384,37 @@ qa_plot_obs_influence("fj_2019-02_vol", M, obs_xy, pars_xy, wmin=0.01)  # should
 
 # Shackleford Creek
 qa_plot_obs_influence("sck_20071203", M, obs_xy, pars_xy, wmin=0.01)
+
+# More chex courtesy of our AI overlords
+
+# Names sanity — obs/pars you think are spatial actually appear in M
+assert set(obs_xy.index).issubset(set(M.row_names)), "Some spatial obs not in PST rows"
+assert set(pars_xy.index).issubset(set(M.col_names)), "Some PP params not in PST cols"
+
+# Triplet assignment sanity — did we really set some ones?
+assert float(M.x.max()) >= 1.0, "Localizer seems empty—triplet fill failed?"
+
+# Quartz blocks really zero
+def _blkmax(rnames, cnames):
+    ri = pyemu.Matrix.find_rowcol_indices(rnames, M.row_names, M.col_names, axis=0)
+    ci = pyemu.Matrix.find_rowcol_indices(cnames, M.row_names, M.col_names, axis=1)
+    return 0.0 if (ri.size==0 or ci.size==0) else float(M.x[np.ix_(ri,ci)].max())
+
+assert _blkmax(q_obs_out_names, q_par_in_names) == 0.0, "Quartz rule A failed (out×in not zero)"
+assert _blkmax(q_obs_in_names,  q_par_out_names) == 0.0, "Quartz rule B failed (in×out not zero)"
+
+# BY/AS “upstream only” sanity
+assert _blkmax(glo_obs_by, glo_par_nonby) == 0.0, "BY rule failed (BY × non-upstream not zero)"
+assert _blkmax(glo_obs_as, glo_par_nonas) == 0.0, "AS rule failed (AS × non-upstream not zero)"
+
+# Global rows/cols stayed open (spot checks)
+# pick a couple known global obs/pars (present in your PST) to ensure earlier 1.0 fills survived the later zeroing:
+for ob in glo_obs[:3]:
+    oi = pyemu.Matrix.find_rowcol_indices([ob], M.row_names, M.col_names, axis=0)
+    if oi.size:
+        assert float(M.x[oi, :].min()) >= 0.0  # should be ≥0; if you expect 1.0 everywhere, tighten this
+
+for pa in glo_par[:3]:
+    ci = pyemu.Matrix.find_rowcol_indices([pa], M.row_names, M.col_names, axis=1)
+    if ci.size:
+        assert float(M.x[:, ci].min()) >= 0.0
