@@ -43,7 +43,7 @@ def build_sim_sets(hob_out: pd.DataFrame, obs_master: pd.DataFrame) -> pd.DataFr
     """
     # 1) Extract per-observation weights from obs_master DIFF rows.
     #    These are the weights that defined the *mask* and (if positive) contribute to the simulated mean.
-    diff_mask = obs_master[obs_master["group"] == "DIFF_HEAD"].copy()
+    diff_mask = obs_master[obs_master["group"] == "hds_diff"].copy()
     # original obsnme = DIFF obsnme without the "_DM" suffix
     diff_mask["orig_obsnme"] = diff_mask["obsnme"].str.replace("_DM$", "", regex=True)
     obs_wt_map = diff_mask.set_index("orig_obsnme")["weight"].to_dict()
@@ -65,17 +65,17 @@ def build_sim_sets(hob_out: pd.DataFrame, obs_master: pd.DataFrame) -> pd.DataFr
     # AVG rows: name, sim value
     avg_rows = sim_means.copy()
     avg_rows["obsnme"] = avg_rows["wellid"] + "_AVG"
-    avg_rows["group"]  = "AVG_HEAD"
+    avg_rows["group"]  = "hds_avg"
     avg_rows["simval_t"] = avg_rows["sim_mean"]
     avg_rows = avg_rows[["obsnme", "simval_t", "group", "wellid"]]
 
     # 4) DIFF rows: for each original HOB row, sim − simulated mean
     hob = hob.merge(sim_means[["wellid", "sim_mean"]], on="wellid", how="left")
     hob["simval_t"] = hob["simval"] - hob["sim_mean"]
-    hob["obsnme_t"] = hob["obsnme"] + "_DM"
+    hob["obsnme_t"] = hob["obsnme"]  #+ "_DM"
     # drop the old obsnme before renaming to avoid duplicate label
     diff_rows = hob.drop(columns=["obsnme"]).rename(columns={"obsnme_t": "obsnme"})
-    diff_rows["group"] = "DIFF_HEAD"
+    diff_rows["group"] = "hds_diff"
     diff_rows = diff_rows[["obsnme", "simval_t", "group", "wellid"]]
 
     # 5) VDIFF rows: top − bottom, matched by reltime
@@ -90,14 +90,14 @@ def build_sim_sets(hob_out: pd.DataFrame, obs_master: pd.DataFrame) -> pd.DataFr
         m["simval_t"] = m["top_val"] - m["bot_val"]
         # Use the same names that exist in obs_master (don’t re-invent):
         # Find the subset of obs_master names for this pair in order
-        names_expected = obs_master[(obs_master["group"]=="VDIFF") &
+        names_expected = obs_master[(obs_master["group"]=="hds_vdiff") &
                                     (obs_master["wellid"]==top_well)]["obsnme"].tolist()
         # If lengths match, use expected names; else fallback to enumerated names
         if len(names_expected) == len(m):
             m["obsnme"] = names_expected
         else:
             m["obsnme"] = [f"{top_well}_VD.{i}" for i in m.index]
-        m["group"] = "VDIFF"
+        m["group"] = "hds_vdiff"
         m["wellid"] = top_well
         vdiff_list.append(m[["obsnme", "simval_t", "group", "wellid"]])
 
