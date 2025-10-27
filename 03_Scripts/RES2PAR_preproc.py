@@ -33,6 +33,9 @@ yoff = 4571330
 max_outside_dist = 500
 tailings_issue_logs = [18416, 18424, 18223, 18528, 18339]
 
+# Include AEM/Lith KVME pilot points?
+kvme_pp_flag = False
+
 # Textures
 texs = ['Fine', 'Mixed_Fine','Sand', 'Mixed_Coarse', 'Very_Coarse']
 
@@ -44,6 +47,15 @@ PPSETS = {
         "fac_pattern": 'scale_pp_L{lay}.fac',        # pre-written factor file
         "colname": 'scale_{tex}',                    # Name it output file column
     },
+    "kv_mult_pp": {
+        "targets": ['kv_mult'],
+        "dat_pattern": 'pp_kv_var_L{lay}.dat',
+        "fac_pattern": 'kv_mult_pp_L{lay}.fac',
+        "colname": 'kv_mult',
+    },
+}
+
+kvme_pp = {
     "lth_var_pp": {
         "targets": ['lth_var'],
         "dat_pattern": 'pp_lth_var_L{lay}.dat',
@@ -55,14 +67,11 @@ PPSETS = {
         "dat_pattern": 'pp_aem_var_L{lay}.dat',
         "fac_pattern": 'aem_var_pp_L{lay}.fac',
         "target_file": 'aem_var_pp_L{lay}_targets.csv',
-    },
-    "kv_mult_pp": {
-        "targets": ['kv_mult'],
-        "dat_pattern": 'pp_kv_var_L{lay}.dat',
-        "fac_pattern": 'kv_mult_pp_L{lay}.fac',
-        "colname": 'kv_mult',
-    },
+    }
 }
+
+if kvme_pp_flag:
+    PPSETS = PPSETS | kvme_pp
 
 #----------------------------------------------------------------------------------------------------------------------#
 # Functions/Classes
@@ -348,7 +357,6 @@ grid_df_out['layer'] = grid_df_out['layer'] + 1  # 1-index for R2P
 grid_df_out[['node']+use_cols].to_csv(out_dir / 'kv_mult.csv', index=False)
 print('Wrote Texture Distribution file: kv_mult.csv')
 
-
 #----------------------------------------------------------------------------------------------------------------------#
 # Lithology Conversion
 #----------------------------------------------------------------------------------------------------------------------#
@@ -364,8 +372,11 @@ litho['node'] = node_from_lrc_cols(litho, gwf)
 litho = attach_scale_and_stats(litho, grid_df, tex_dists, tex_col="tex")
 
 # Get PP variance
-lth_df = lth_df.rename(columns={'Layer':'layer'})
-litho = pd.merge(litho, lth_df, how='left', on=['WELL_INFO_ID','layer'])
+if kvme_pp_flag:
+    lth_df = lth_df.rename(columns={'Layer':'layer'})
+    litho = pd.merge(litho, lth_df, how='left', on=['WELL_INFO_ID','layer'])
+else:
+    litho['var_value'] = 0.0
 
 # Add pp "nugget" variance
 litho['var_logrho'] = litho['RHO_I_STD']**2 + litho['var_value']
@@ -391,8 +402,11 @@ aem['logrho'] = np.log(aem['RHO_I'])
 #aem['node'] = node_from_lrc_cols(aem, gwf)
 
 # Get PP variance
-aem_df = aem_df.rename(columns={'Layer':'layer'})
-aem = pd.merge(aem, aem_df, how='left', on=['WELL_INFO_ID','layer'])
+if kvme_pp_flag:
+    aem_df = aem_df.rename(columns={'Layer':'layer'})
+    aem = pd.merge(aem, aem_df, how='left', on=['WELL_INFO_ID','layer'])
+else:
+    aem['var_value'] = 0.0
 
 # Add pp "nugget" variance
 aem['var_logrho'] = aem['RHO_I_STD']**2 + aem['var_value']

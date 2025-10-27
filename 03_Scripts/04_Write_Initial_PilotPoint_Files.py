@@ -40,6 +40,9 @@ layers = 2
 # Filtering near Layer 2
 boundary_threshold = 250.0  # meters
 
+# Include AEM/Lith KVME pilot points?
+kvme_pp_flag = False
+
 # Textures (for scale_pp parameters)
 texs = ['Fine', 'Mixed_Fine', 'Sand', 'Mixed_Coarse', 'Very_Coarse']
 tex_short = ['1FF', '2MF', '3SC', '3MC', '4VC']
@@ -48,14 +51,14 @@ tex_short = ['1FF', '2MF', '3SC', '3MC', '4VC']
 scale_gs = pyemu.geostats.GeoStruct(variograms=[
     pyemu.geostats.ExpVario(contribution=1.0, a=2317*2)
 ])
+kv_mult_gs = pyemu.geostats.GeoStruct(variograms=[
+    pyemu.geostats.ExpVario(contribution=1.0, a=93*2)
+])
 lth_nug_gs = pyemu.geostats.GeoStruct(variograms=[
     pyemu.geostats.ExpVario(contribution=1.0, a=259*1)
 ])
 aem_nug_gs = pyemu.geostats.GeoStruct(variograms=[
     pyemu.geostats.ExpVario(contribution=1.0, a=40*2)
-])
-kv_mult_gs = pyemu.geostats.GeoStruct(variograms=[
-    pyemu.geostats.ExpVario(contribution=1.0, a=93*2)
 ])
 
 # Per-PP-set config (locations are fixed here; values come from PEST later)
@@ -68,6 +71,16 @@ PPSETS = {
         "dat_pattern": 'scale_pp_{tex}_L{lay}.dat',     # PEST will write this from tpl
         "maxpts": 16
     },
+    "kv_mult_pp": {
+        "shp": shp_dir / 'mult_pp.shp',
+        "targets": ['kv_mult'],
+        "gs": kv_mult_gs,
+        "tpl_pattern": 'pp_kv_var_L{lay}.dat.tpl',
+        "dat_pattern": 'pp_kv_var_L{lay}.dat',
+        "maxpts": 16
+    },
+}
+kvme_pp = {
     "lth_var_pp": {
         "shp": shp_dir / 'litho_pp.shp',
         "targets": ['lth_var'],
@@ -84,15 +97,10 @@ PPSETS = {
         "dat_pattern": 'pp_aem_var_L{lay}.dat',
         "maxpts": 4
     },
-    "kv_mult_pp": {
-        "shp": shp_dir / 'mult_pp.shp',
-        "targets": ['kv_mult'],
-        "gs": kv_mult_gs,
-        "tpl_pattern": 'pp_kv_var_L{lay}.dat.tpl',
-        "dat_pattern": 'pp_kv_var_L{lay}.dat',
-        "maxpts": 16
-    },
 }
+
+if kvme_pp_flag:
+    PPSETS = PPSETS | kvme_pp
 
 # ----------------------------------------------------------------------------------------------------------------------
 # Functions/Classes
@@ -220,24 +228,24 @@ L2_mask = (ib[1, :, :] > 0)
 L2_poly = active_polygon_from_mask(mg, L2_mask)
 
 # ----------------------------------------------------------------------------------------------------------------------
-# Read datasets for kriging AEM/borehole variance to
+# Read datasets for kriging AEM/borehole variance
 # ----------------------------------------------------------------------------------------------------------------------
+if kvme_pp_flag:
+    borehole_data = pd.read_csv(data_dir / 'lithologs.csv')
+    aem_data = pd.read_csv(data_dir / 'aemlogs.csv')
 
-borehole_data = pd.read_csv(data_dir / 'lithologs.csv')
-aem_data = pd.read_csv(data_dir / 'aemlogs.csv')
+    # Constrain to unique locations, based on a name
+    aem_data['WELL_INFO_ID'] = aem_data['LINE_NO'].astype(int).astype(str) + "_" + aem_data['FID'].astype(int).astype(str)
 
-# Constrain to unique locations, based on a name
-aem_data['WELL_INFO_ID'] = aem_data['LINE_NO'].astype(int).astype(str) + "_" + aem_data['FID'].astype(int).astype(str)
-
-# Duplicate targets across layers so we krige separately per layer
-lth_targets = add_layer_column(
-    borehole_data[['WELL_INFO_ID','x','y']].drop_duplicates().rename(columns={"x":"X","y":"Y"})[["WELL_INFO_ID","X","Y"]],
-    layers
-)
-aem_targets = add_layer_column(
-    aem_data[['WELL_INFO_ID','x','y']].drop_duplicates().rename(columns={"x":"X","y":"Y"})[["WELL_INFO_ID","X","Y"]],
-    layers
-)
+    # Duplicate targets across layers so we krige separately per layer
+    lth_targets = add_layer_column(
+        borehole_data[['WELL_INFO_ID','x','y']].drop_duplicates().rename(columns={"x":"X","y":"Y"})[["WELL_INFO_ID","X","Y"]],
+        layers
+    )
+    aem_targets = add_layer_column(
+        aem_data[['WELL_INFO_ID','x','y']].drop_duplicates().rename(columns={"x":"X","y":"Y"})[["WELL_INFO_ID","X","Y"]],
+        layers
+    )
 
 # ----------------------------------------------------------------------------------------------------------------------
 # Read texture initial scales (only to seed initial PP values for 'scale_pp')
@@ -419,23 +427,24 @@ def plot_layer(ax, layer_idx, title):
     sc = sc[sc["Layer"] == layer_idx]
     ax.scatter(sc["X"], sc["Y"], s=10, color=colors["scale"], label="Scale", alpha=0.7)
 
-    li = gpd.read_file(PPSETS["lth_var_pp"]["shp"]); li["X"], li["Y"] = li.geometry.x, li.geometry.y
-    if "layer" in li.columns: li = li.rename(columns={"layer":"Layer"})
-    else: li["Layer"]=0
-    li = li[li["Layer"] == layer_idx]
-    ax.scatter(li["X"], li["Y"], s=10, color=colors["litho"], label="Lithology", alpha=0.7)
-
-    ae = gpd.read_file(PPSETS["aem_var_pp"]["shp"]); ae["X"], ae["Y"] = ae.geometry.x, ae.geometry.y
-    if "layer" in ae.columns: ae = ae.rename(columns={"layer":"Layer"})
-    else: ae["Layer"]=0
-    ae = ae[ae["Layer"] == layer_idx]
-    ax.scatter(ae["X"], ae["Y"], s=10, color=colors["aem"], label="AEM", alpha=0.7)
-
     mu = gpd.read_file(PPSETS["kv_mult_pp"]["shp"]); mu["X"], mu["Y"] = mu.geometry.x, mu.geometry.y
     if "layer" in mu.columns: mu = mu.rename(columns={"layer":"Layer"})
     else: mu["Layer"]=0
     mu = mu[mu["Layer"] == layer_idx]
     ax.scatter(mu["X"], mu["Y"], s=10, color=colors["mult"], label="Multiplier", alpha=0.7)
+
+    if kvme_pp_flag:
+        li = gpd.read_file(PPSETS["lth_var_pp"]["shp"]); li["X"], li["Y"] = li.geometry.x, li.geometry.y
+        if "layer" in li.columns: li = li.rename(columns={"layer":"Layer"})
+        else: li["Layer"]=0
+        li = li[li["Layer"] == layer_idx]
+        ax.scatter(li["X"], li["Y"], s=10, color=colors["litho"], label="Lithology", alpha=0.7)
+
+        ae = gpd.read_file(PPSETS["aem_var_pp"]["shp"]); ae["X"], ae["Y"] = ae.geometry.x, ae.geometry.y
+        if "layer" in ae.columns: ae = ae.rename(columns={"layer":"Layer"})
+        else: ae["Layer"]=0
+        ae = ae[ae["Layer"] == layer_idx]
+        ax.scatter(ae["X"], ae["Y"], s=10, color=colors["aem"], label="AEM", alpha=0.7)
 
     ax.set_title(title); ax.set_aspect("equal")
 

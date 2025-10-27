@@ -38,7 +38,7 @@ PP_GS = {
 
 # Parameters for localization kernel
 # max multiple of horizontal range to search, correlation threshold to keep
-R_MULT = 4.0          # search radius = R_MULT * ah
+R_MULT = 5.0          # search radius = R_MULT * ah
 SCALE_R_MULT = 2.0    # search radius for scale params (have a long range already...)
 RHO_MIN = 0.01        # prune tiny weights
 USE_SQUARED = False   # optionally square rho for tighter localization
@@ -141,7 +141,6 @@ obs.loc[obs.index.str.contains('nse|kge|rmse'), 'weight'] = 0.0
 #----------------------------------------------------------------------------------------------------------------------#
 
 qtz_gdf = gpd.read_file(gis_dir / 'quartz_valley_poly.shp')
-
 
 #----------------------------------------------------------------------------------------------------------------------#
 # Get those distances, build that matrix
@@ -331,8 +330,16 @@ M.to_coo(out_path)
 print(f"Wrote sparse localizer to {out_path}")
 
 #----------------------------------------------------------------------------------------------------------------------#
-# QA/QC
+# QA/QC - from obs
 #----------------------------------------------------------------------------------------------------------------------#
+
+# --- disconnected observations (rows with all zeros)
+obs_names = np.array(M.row_names, dtype=object)
+obs_connected = (M.x > 0).sum(axis=1).A1 if hasattr(M.x, "A1") else (M.x > 0).sum(axis=1)
+obs_disconnected = obs_names[obs_connected == 0]
+
+print(f"Disconnected observations: {len(obs_disconnected)}")
+
 import matplotlib
 matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
@@ -385,6 +392,70 @@ qa_plot_obs_influence("fj_2019-02_vol", M, obs_xy, pars_xy, wmin=0.01)  # should
 # Shackleford Creek
 qa_plot_obs_influence("sck_20071203", M, obs_xy, pars_xy, wmin=0.01)
 
+#----------------------------------------------------------------------------------------------------------------------#
+# QA/QC - from pars
+#----------------------------------------------------------------------------------------------------------------------#
+
+# --- disconnected parameters (columns with all zeros)
+par_names = np.array(M.col_names, dtype=object)
+par_connected = (M.x > 0).sum(axis=0).A1 if hasattr(M.x, "A1") else (M.x > 0).sum(axis=0)
+par_disconnected = par_names[par_connected == 0]
+
+print(f"Disconnected parameters: {len(par_disconnected)}")
+
+def qa_plot_param_influence(par_name, M, obs_xy, pars_xy, wmin=1e-6, annotate_top=0, print_top=0, figsize=(8,7),
+                            return_df=False):
+    # indices in M
+    cn = list(M.col_names)
+    rn = list(M.row_names)
+    if par_name not in cn:
+        raise KeyError(f"Parameter '{par_name}' not in M.col_names")
+
+    j = cn.index(par_name)
+    w = np.asarray(M.x[:, j]).ravel()                   # weight for all obs
+    w_series = pd.Series(w, index=rn, name='w')
+
+    # align to spatial obs only (globals won't have x/y)
+    obs_xy_ = obs_xy.copy()
+    df = obs_xy_.join(w_series, how='left').fillna({'w':0.0})
+
+    n_pos = int((df['w']>0).sum()); n_strong = int((df['w']>=wmin).sum())
+    print(f"[{par_name}] nonzero obs: {n_pos:,}  (>= {wmin:g}: {n_strong:,})")
+
+    # param xy for marker (if spatial PP)
+    if par_name in pars_xy.index:
+        px, py = pars_xy.loc[par_name, ['x','y']]
+    else:
+        px = py = np.nan
+
+    fig, ax = plt.subplots(figsize=figsize)
+    sc = ax.scatter(df['x'], df['y'], c=df['w'], s=14, cmap='viridis')
+    cb = plt.colorbar(sc, ax=ax, shrink=0.9); cb.set_label('Localizer weight (obs ← param)')
+    ax.set_aspect('equal', adjustable='box')
+
+    if np.isfinite(px) and np.isfinite(py):
+        ax.scatter([px],[py], s=70, marker='x', linewidths=2, color='red', label='parameter')
+        ax.legend(loc='best')
+
+    ax.set_title(f"Influence map for parameter: {par_name}")
+    ax.set_xlabel("x (m)"); ax.set_ylabel("y (m)")
+
+    if annotate_top and n_pos>0:
+        top = df.sort_values('w', ascending=False).head(annotate_top)
+        for obsnme, r in top.iterrows():
+            ax.annotate(obsnme, (r['x'], r['y']), fontsize=8, xytext=(3,3), textcoords='offset points')
+
+    if print_top and n_pos>0:
+        print(df.sort_values('w', ascending=False).head(print_top))
+
+    plt.tight_layout()
+    if return_df:
+        return df[['w']]
+
+huh = qa_plot_param_influence('SCALE_3SC_L0_53'.lower(), M, obs_xy, pars_xy, wmin=0.01, annotate_top=10, print_top=10, return_df=True)
+
+
+#----------------------------------------------------------------------------------------------------------------------#
 # More chex courtesy of our AI overlords
 
 # Names sanity — obs/pars you think are spatial actually appear in M

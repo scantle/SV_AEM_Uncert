@@ -19,6 +19,9 @@ xoff = 499977
 yoff = 4571330
 origin_date = pd.to_datetime('1990-9-30')
 
+# Include AEM/Lith KVME pilot points?
+kvme_pp_flag = False
+
 # Directories
 orig_dir = os.getcwd()
 pest_dir = Path("04_PEST_setup")   # TPL, INS
@@ -33,7 +36,7 @@ pestpp_exe = Path('C:/Users/lelan/Documents/Models/pestpp-5.2.16-iwin/bin/pestpp
 
 # Out
 pst_file = 'svihm_ies.pst'
-ensemble_size = 50
+ensemble_size = 1000
 
 # horizontal / vertical ranges (meters) and sills by PP family - Exponential Variogram
 # must match 04_Write_Initial_PilotPoint_Files.py
@@ -368,9 +371,10 @@ print(f'Updated {pp_updated} / {pp_pars.shape[0]} pars in PP CSVs')
 
 # Pilot point transforms, bounds (by group)
 par.loc[par.index.intersection(pp_pars.index), 'partrans'] = 'none'
-par.loc[par.pargp=='aem_var', ['parlbnd','parubnd']] = (0.0, 5.0)
-par.loc[par.pargp=='lth_var', ['parlbnd','parubnd']] = (0.0, 5.0)
 par.loc[par.pargp=='kv_mult', ['parlbnd','parubnd']] = (-3.0, 3.0)
+if kvme_pp_flag:
+    par.loc[par.pargp=='aem_var', ['parlbnd','parubnd']] = (0.0, 5.0)
+    par.loc[par.pargp=='lth_var', ['parlbnd','parubnd']] = (0.0, 5.0)
 par.loc[par.pargp.str.contains('scale'), ['parlbnd','parubnd']] = (1.1, 3.3)
 par.loc[par.pargp.str.contains('scale_1FF'), ['parlbnd','parubnd']] = (0.5, 1.5)
 
@@ -420,7 +424,7 @@ pst.pestpp_options["ies_phi_factor_file"] = "factor_weights.dat"
 #----------------------------------------------------------------------------------------------------------------------#
 
 # build full cov with PP blocks
-full_cov = build_full_cov_with_pp_blocks(pst, pp_pars)
+full_cov = build_full_cov_with_pp_blocks(pst, pp_pars, sigma_range=3.0)
 full_cov.to_coo("parcov.jcb")  # Can't take names with 20+ characters!
 pst.pestpp_options["parcov"] = "parcov.jcb"
 
@@ -446,11 +450,15 @@ pst.pestpp_options['ies_reg_factor'] = 0.05  #
 pst.pestpp_options["ies_bad_phi_sigma"] = 2.0  # middle ground value
 pst.pestpp_options["ies_num_threads"] = 8
 pst.control_data.noptmax = -2
+pst.pestpp_options["ies_enforce_bounds"] = True
+pst.pestpp_options["overdue_giveup_fac"] = 4
+
 
 # Localization
 pst.pestpp_options["ies_localizer"] = "localizer.jcb"
 pst.pestpp_options["ies_autoadaloc"] = True
 pst.pestpp_options["ies_autoadaloc_sigma_dist"] = 2
+
 
 pst.write(pst_file, version=2)
 os.chdir(orig_dir)
