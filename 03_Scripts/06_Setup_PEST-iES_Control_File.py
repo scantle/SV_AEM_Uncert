@@ -36,7 +36,7 @@ pestpp_exe = Path('C:/Users/lelan/Documents/Models/pestpp-5.2.16-iwin/bin/pestpp
 
 # Out
 pst_file = 'svihm_ies.pst'
-ensemble_size = 1000
+ensemble_size = 500
 
 # horizontal / vertical ranges (meters) and sills by PP family - Exponential Variogram
 # must match 04_Write_Initial_PilotPoint_Files.py
@@ -131,6 +131,42 @@ def build_full_cov_with_pp_blocks(pst, pp_pars, sigma_range=4.0):
 
 #----------------------------------------------------------------------------------------------------------------------#
 
+def t2p_par2par_chain(df):
+    out = {}
+    # --- K chain ---
+    pvals = df.copy()
+
+    out['k_ff'] = pvals['kminff1']
+    out['k_mf'] = out['k_ff'] * pvals['kminmf1_m']
+    out['k_sc'] = out['k_mf'] * pvals['kminsc1_m']
+    out['k_mc'] = out['k_sc'] * pvals['kminmc1_m']
+    out['k_vc'] = out['k_mc'] * pvals['kminvc1_m']
+
+    # --- Aniso chain ---
+    out['an_vc'] = pvals['anisovc1']
+    out['an_mc'] = out['an_vc'] * pvals['anisomc1_m']
+    out['an_sc'] = out['an_mc'] * pvals['anisosc1_m']
+    out['an_mf'] = out['an_sc'] * pvals['anisomf1_m']
+    out['an_ff'] = out['an_mf'] * pvals['anisoff1_m']
+
+    # --- Ss chain ---
+    out['ss_ff'] = pvals['ssff1']
+    out['ss_mf'] = out['ss_ff'] * pvals['ssmf1_m']
+    out['ss_sc'] = out['ss_mf'] * pvals['sssc1_m']
+    out['ss_mc'] = out['ss_sc'] * pvals['ssmc1_m']
+    out['ss_vc'] = out['ss_mc'] * pvals['ssvc1_m']
+
+    # --- Sy chain ---
+    out['sy_sc'] = pvals['sysc1']
+    out['sy_mf'] = out['sy_sc'] * pvals['symf1_m']
+    out['sy_ff'] = out['sy_mf'] * pvals['syff1_m']
+    out['sy_mc'] = out['sy_sc'] * pvals['symc1_m']
+    out['sy_vc'] = out['sy_mc'] * pvals['syvc1_m']
+
+    return pd.DataFrame(out), list(out.keys())
+
+#----------------------------------------------------------------------------------------------------------------------#
+
 def t2p_par2par_frompar(t2p_parameters):
     """
     Replicates the chain multiplications from the par2par file and
@@ -153,46 +189,19 @@ def t2p_par2par_frompar(t2p_parameters):
     df.index = df.index.str.lower()
 
     # Compute the true parameter values: parval1 * scale + offset
-    pvals = df['parval1'] * df['scale'] + df['offset']
+    pvals = (df['parval1'] * df['scale'] + df['offset']).to_frame().T
 
-    # --- Kmin chain ---
-    k_ff = pvals['kminff1']
-    k_mf = k_ff * pvals['kminmf1_m']
-    k_sc = k_mf * pvals['kminsc1_m']
-    k_mc = k_sc * pvals['kminmc1_m']
-    k_vc = k_mc * pvals['kminvc1_m']
+    # Never break the chain
+    chain_df, _ = t2p_par2par_chain(pvals)
+    r = chain_df.iloc[0]
+    df_out =  pd.DataFrame({
+        "FF": {"Kmin": r.k_ff, "Aniso": r.an_ff, "Ss": r.ss_ff, "Sy": r.sy_ff},
+        "MF": {"Kmin": r.k_mf, "Aniso": r.an_mf, "Ss": r.ss_mf, "Sy": r.sy_mf},
+        "SC": {"Kmin": r.k_sc, "Aniso": r.an_sc, "Ss": r.ss_sc, "Sy": r.sy_sc},
+        "MC": {"Kmin": r.k_mc, "Aniso": r.an_mc, "Ss": r.ss_mc, "Sy": r.sy_mc},
+        "VC": {"Kmin": r.k_vc, "Aniso": r.an_vc, "Ss": r.ss_vc, "Sy": r.sy_vc},
+    }).T[["Kmin", "Aniso", "Ss", "Sy"]]
 
-    # --- Aniso chain ---
-    an_vc = pvals['anisovc1']
-    an_mc = an_vc * pvals['anisomc1_m']
-    an_sc = an_mc * pvals['anisosc1_m']
-    an_mf = an_sc * pvals['anisomf1_m']
-    an_ff = an_mf * pvals['anisoff1_m']
-
-    # --- Ss chain ---
-    ss_ff = pvals['ssff1']
-    ss_mf = ss_ff * pvals['ssmf1_m']
-    ss_sc = ss_mf * pvals['sssc1_m']
-    ss_mc = ss_sc * pvals['ssmc1_m']
-    ss_vc = ss_mc * pvals['ssvc1_m']
-
-    # --- Sy chain ---
-    sy_sc = pvals['sysc1']
-    sy_mf = sy_sc * pvals['symf1_m']
-    sy_ff = sy_mf * pvals['syff1_m']
-    sy_mc = sy_sc * pvals['symc1_m']
-    sy_vc = sy_mc * pvals['syvc1_m']
-
-    # Final values by texture
-    final_vals = {
-        "FF": {"Kmin": k_ff, "Aniso": an_ff, "Ss": ss_ff, "Sy": sy_ff},
-        "MF": {"Kmin": k_mf, "Aniso": an_mf, "Ss": ss_mf, "Sy": sy_mf},
-        "SC": {"Kmin": k_sc, "Aniso": an_sc, "Ss": ss_sc, "Sy": sy_sc},
-        "MC": {"Kmin": k_mc, "Aniso": an_mc, "Ss": ss_mc, "Sy": sy_mc},
-        "VC": {"Kmin": k_vc, "Aniso": an_vc, "Ss": ss_vc, "Sy": sy_vc},
-    }
-
-    df_out = pd.DataFrame(final_vals).T[["Kmin", "Aniso", "Ss", "Sy"]]
     df_out['Ss'] = df_out['Ss'].apply(lambda x: np.format_float_scientific(x, precision=2))
     df_out['Sy'] = df_out['Sy'].apply(lambda x: np.format_float_scientific(x, precision=2))
 
@@ -268,7 +277,7 @@ if fmdir.exists():
 # Forward Model Files
 shutil.copytree(model_dir, fmdir)
 
-# Head obs file...
+# Head obs file,
 shutil.copy2(data_dir / 'head_obs_master.csv', fmdir / 'MODFLOW')
 
 # Latest EXEs
@@ -378,13 +387,6 @@ if kvme_pp_flag:
 par.loc[par.pargp.str.contains('scale'), ['parlbnd','parubnd']] = (1.1, 3.3)
 par.loc[par.pargp.str.contains('scale_1FF'), ['parlbnd','parubnd']] = (0.5, 1.5)
 
-# Catchment, streamflow multipliers
-wtr_updated = 0
-#par.loc[par.parnme.str.contains('catch_mult'),['parval1','parlbnd','parubnd','pargp']] = (0.5, 0.1, 1.0, 'catch_mult')
-#par.loc[par.parnme.str.contains('str_mult'),['parval1','parlbnd','parubnd','pargp']] = (1.0, 0.1, 1.0, 'str_mult')
-#wtr_updated += par.loc[par.parnme.str.contains('catch_mult')].shape[0] + par.loc[par.parnme.str.contains('str_mult')].shape[0]
-#print(f'Updated {wtr_updated} catchment/str mult using default values')
-
 # Previous parameters (overwrite any previously set values)
 par_updated = 0
 for col in ['parval1', 'parlbnd', 'parubnd', 'pargp', 'scale', 'offset']:
@@ -393,7 +395,7 @@ for col in ['parval1', 'parlbnd', 'parubnd', 'pargp', 'scale', 'offset']:
 # Check
 par_updated += par.loc[par.index.intersection(prev_par.index), col].shape[0]
 print(f'Updated {par_updated} / {prev_par.shape[0]} pars in prev CSV')
-print(f'In total, {pp_updated + par_updated + wtr_updated} / {par.shape[0]} parameters have been updated.')
+print(f'In total, {pp_updated + par_updated} / {par.shape[0]} parameters have been updated.')
 
 # Check (base) texture parameters
 t2p_par2par_frompar(par)
@@ -424,20 +426,26 @@ pst.pestpp_options["ies_phi_factor_file"] = "factor_weights.dat"
 #----------------------------------------------------------------------------------------------------------------------#
 
 # build full cov with PP blocks
-full_cov = build_full_cov_with_pp_blocks(pst, pp_pars, sigma_range=3.0)
+full_cov = build_full_cov_with_pp_blocks(pst, pp_pars, sigma_range=2.0)
 full_cov.to_coo("parcov.jcb")  # Can't take names with 20+ characters!
 pst.pestpp_options["parcov"] = "parcov.jcb"
 
 # full_cov.to_ascii(work_dir / "parcov.cov")
 # pst.pestpp_options["parcov"] = "parcov.cov"
 
-pe = pyemu.ParameterEnsemble.from_gaussian_draw(pst, cov=full_cov, num_reals=ensemble_size)
-pe.enforce(how="reset")
-#bound_pressure_report(pst, pe)
+potential_pe = pyemu.ParameterEnsemble.from_gaussian_draw(pst, cov=full_cov, num_reals=ensemble_size*5)
+potential_pe.enforce()
+tex_pars, _ = t2p_par2par_chain(pd.DataFrame(potential_pe, columns=potential_pe.adj_names))
+# Some filtering because the multiplier approach can come up with some wild values
+good_rows = tex_pars.loc[(tex_pars.k_vc < 350) & (tex_pars.k_vc > 10) & (tex_pars.an_ff < 100)].index.tolist()
+prior_pe = potential_pe.loc[good_rows].sample(frac=1.0, random_state=42).iloc[:ensemble_size].reset_index(drop=True)
 
-pe.to_csv("prior_pe.csv")
+prior_pe.to_csv("prior_pe.csv")
 pst.pestpp_options["ies_parameter_ensemble"] = "prior_pe.csv"
 pst.pestpp_options["ies_num_reals"] = ensemble_size
+
+# If you get curious
+good_tex_pars, _ = t2p_par2par_chain(prior_pe)
 
 #----------------------------------------------------------------------------------------------------------------------#
 # LET'S GOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO

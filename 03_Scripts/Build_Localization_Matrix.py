@@ -329,6 +329,9 @@ out_path = pest_dir / "localizer.jcb"
 M.to_coo(out_path)
 print(f"Wrote sparse localizer to {out_path}")
 
+# # Read in localizer file...
+# M = pyemu.Matrix.from_binary(pest_dir / "localizer.jcb")
+
 #----------------------------------------------------------------------------------------------------------------------#
 # QA/QC - from obs
 #----------------------------------------------------------------------------------------------------------------------#
@@ -452,8 +455,8 @@ def qa_plot_param_influence(par_name, M, obs_xy, pars_xy, wmin=1e-6, annotate_to
     if return_df:
         return df[['w']]
 
-huh = qa_plot_param_influence('SCALE_3SC_L0_53'.lower(), M, obs_xy, pars_xy, wmin=0.01, annotate_top=10, print_top=10, return_df=True)
-
+huh = qa_plot_param_influence('SCALE_1FF_L0_4'.lower(), M, obs_xy, pars_xy, wmin=0.01, annotate_top=10, print_top=10, return_df=True)
+huh = qa_plot_param_influence('KV_MULT_L1_91'.lower(), M, obs_xy, pars_xy, wmin=0.01, annotate_top=10, print_top=10, return_df=True)
 
 #----------------------------------------------------------------------------------------------------------------------#
 # More chex courtesy of our AI overlords

@@ -409,49 +409,147 @@ for tag, cfg in tqdm(PPSETS.items(), 'PP Set', total=len(PPSETS.keys())):
         )
 
 # ----------------------------------------------------------------------------------------------------------------------
-# Plot PP types by layer
+# Plot PP types by layer  (publication-ready)
 # ----------------------------------------------------------------------------------------------------------------------
 
-fig, axes = plt.subplots(1, 2, figsize=(12, 6), sharex=True, sharey=True)
-colors = {"scale":"tab:blue","litho":"tab:green","aem":"tab:orange","mult":"tab:red"}
+from matplotlib.lines import Line2D
 
-def plot_layer(ax, layer_idx, title):
+plt_dir.mkdir(parents=True, exist_ok=True)
+
+# --- Style tweaks ---
+plt.rcParams.update({
+    "axes.facecolor": "white",
+    "savefig.facecolor": "white",
+    "font.sans-serif": ["Bahnschrift", "Arial"],
+    "font.size": 10
+})
+
+# Color/marker map (colorblind-friendly; kv_mult dense -> neutral gray)
+C_SCALE = "#ff7f0e"  # orange
+C_MULT  = "#7f7f7f"  # gray
+C_LITHO = "#2ca02c"  # green (if used)
+C_AEM   = "#1f77b4"  # blue (if used)
+
+M_SCALE = "^"        # triangle
+M_MULT  = "o"        # circle
+M_LITHO = "s"        # square
+M_AEM   = "D"        # diamond
+
+def _remove_axes_clutter(ax):
+    ax.set_xlabel(""); ax.set_ylabel("")
+    ax.set_xticks([]); ax.set_yticks([])
+    for spine in ax.spines.values():
+        spine.set_visible(False)
+
+def _draw_active_boundary(ax, layer_idx):
     mask = (ib[layer_idx, :, :] > 0)
     poly = active_polygon_from_mask(mg, mask)
     if not poly.is_empty:
-        gpd.GeoSeries([poly]).boundary.plot(ax=ax, color="k", linewidth=0.5)
+        gpd.GeoSeries([poly]).boundary.plot(ax=ax, color="black", linewidth=0.6, zorder=2)
 
-    # Reload per set (so we plot after any filtering/duplication)
-    sc = gpd.read_file(PPSETS["scale_pp"]["shp"]); sc["X"], sc["Y"] = sc.geometry.x, sc.geometry.y
-    sc = add_layer_column(sc[["X","Y"]], layers)
-    sc = sc[sc["Layer"] == layer_idx]
-    ax.scatter(sc["X"], sc["Y"], s=10, color=colors["scale"], label="Scale", alpha=0.7)
+def _north_arrow(ax, xy=(0.92, 0.12)):
+    # simple north arrow in axes coords
+    ax.annotate("N", xy=(xy[0], xy[1]+0.08), xytext=xy,
+                xycoords="axes fraction", textcoords="axes fraction",
+                ha="center", va="center",
+                arrowprops=dict(arrowstyle="-|>", lw=1.5),
+                fontsize=10, zorder=10)
 
-    mu = gpd.read_file(PPSETS["kv_mult_pp"]["shp"]); mu["X"], mu["Y"] = mu.geometry.x, mu.geometry.y
-    if "layer" in mu.columns: mu = mu.rename(columns={"layer":"Layer"})
-    else: mu["Layer"]=0
-    mu = mu[mu["Layer"] == layer_idx]
-    ax.scatter(mu["X"], mu["Y"], s=10, color=colors["mult"], label="Multiplier", alpha=0.7)
+def _scalebar(ax, length_m=000, height=0.01, loc=(0.06, 0.06), text_offset=0.02):
+    # Draw a simple scalebar in data units (assumes projected meters)
+    x0, x1 = ax.get_xlim()
+    y0, y1 = ax.get_ylim()
+    Lx = x1 - x0
+    Ly = y1 - y0
 
+    bar_x0 = x0 + loc[0] * Lx
+    bar_y0 = y0 + loc[1] * Ly
+    bar_x1 = bar_x0 + length_m
+
+    ax.add_patch(plt.Rectangle((bar_x0, bar_y0), length_m, height*Ly,
+                               edgecolor="black", facecolor="black", zorder=9))
+    ax.text(bar_x0 + length_m/2, bar_y0 + (text_offset+height)*Ly,
+            f"{int(length_m)} m", ha="center", va="bottom", fontsize=9, zorder=10)
+
+def _plot_layer(ax, layer_idx, title, panel_tag):
+
+    # active boundary
+    _draw_active_boundary(ax, layer_idx)
+
+    # Pilot points (use pp_cache so it reflects filtering/duplication)
+    # kv_mult (dense)
+    if "kv_mult_pp" in pp_cache:
+        kk = pp_cache["kv_mult_pp"]
+        kk = kk[kk["Layer"] == layer_idx]
+        if not kk.empty:
+            ax.scatter(kk["X"], kk["Y"], s=9, c=C_MULT, marker=M_MULT,
+                       alpha=0.85, edgecolors="none", zorder=3, label="Kriging variance multiplier")
+
+    # scale_pp (sparser)
+    if "scale_pp" in pp_cache:
+        sc = pp_cache["scale_pp"]
+        sc = sc[sc["Layer"] == layer_idx]
+        if not sc.empty:
+            ax.scatter(sc["X"], sc["Y"], s=28, c=C_SCALE, marker=M_SCALE,
+                       alpha=0.95, edgecolors="black", linewidths=0.25, zorder=4,
+                       label="Texture–resistivity scale")
+
+    # Optional: KVME sources if included
     if kvme_pp_flag:
-        li = gpd.read_file(PPSETS["lth_var_pp"]["shp"]); li["X"], li["Y"] = li.geometry.x, li.geometry.y
-        if "layer" in li.columns: li = li.rename(columns={"layer":"Layer"})
-        else: li["Layer"]=0
-        li = li[li["Layer"] == layer_idx]
-        ax.scatter(li["X"], li["Y"], s=10, color=colors["litho"], label="Lithology", alpha=0.7)
+        if "lth_var_pp" in pp_cache:
+            li = pp_cache["lth_var_pp"]
+            li = li[li["Layer"] == layer_idx]
+            if not li.empty:
+                ax.scatter(li["X"], li["Y"], s=18, c=C_LITHO, marker=M_LITHO,
+                           alpha=0.95, edgecolors="black", linewidths=0.2, zorder=5, label="Lithology variance")
 
-        ae = gpd.read_file(PPSETS["aem_var_pp"]["shp"]); ae["X"], ae["Y"] = ae.geometry.x, ae.geometry.y
-        if "layer" in ae.columns: ae = ae.rename(columns={"layer":"Layer"})
-        else: ae["Layer"]=0
-        ae = ae[ae["Layer"] == layer_idx]
-        ax.scatter(ae["X"], ae["Y"], s=10, color=colors["aem"], label="AEM", alpha=0.7)
+        if "aem_var_pp" in pp_cache:
+            ae = pp_cache["aem_var_pp"]
+            ae = ae[ae["Layer"] == layer_idx]
+            if not ae.empty:
+                ax.scatter(ae["X"], ae["Y"], s=18, c=C_AEM, marker=M_AEM,
+                           alpha=0.95, edgecolors="black", linewidths=0.2, zorder=5, label="AEM variance")
 
-    ax.set_title(title); ax.set_aspect("equal")
+    # panel tag + title
+    ax.set_title(f"{panel_tag} {title}", loc="center", fontsize=14, y=0.95)
+    ax.set_aspect("equal", adjustable="box")
+    _remove_axes_clutter(ax)
 
-plot_layer(axes[0], 0, "Layer 1")
-plot_layer(axes[1], 1, "Layer 2")
-axes[0].legend(loc="upper right", fontsize=8)
+# --- Figure ---
+fig, axes = plt.subplots(1, 2, figsize=(8, 8), sharex=True, sharey=True)
+
+_plot_layer(axes[0], 0, "Layer 1", "")
+_plot_layer(axes[1], 1, "Layer 2", "")
+
+# Add scalebar + north arrow on left panel only (after limits are known)
 plt.tight_layout()
+for ax in axes:
+    # Ensure limits are locked before scalebar placement
+    ax.set_xlim(*axes[0].get_xlim())
+    ax.set_ylim(*axes[0].get_ylim())
+
+_scalebar(axes[0], length_m=5000)
+_north_arrow(axes[0], xy=(0.16, 0.16))
+
+# Legend: build explicit handles to avoid dupes and control order
+handles = [
+    Line2D([], [], marker=M_MULT,  color=C_MULT,  linestyle="None", markersize=5, label="Kriging variance multiplier"),
+    Line2D([], [], marker=M_SCALE, color=C_SCALE, markeredgecolor="black", markeredgewidth=0.5,
+           linestyle="None", markersize=6, label="Texture–resistivity scale"),
+]
+if kvme_pp_flag:
+    handles += [
+        Line2D([], [], marker=M_LITHO, color=C_LITHO, markeredgecolor="black", markeredgewidth=0.4,
+               linestyle="None", markersize=6, label="Lithology variance"),
+        Line2D([], [], marker=M_AEM,   color=C_AEM,   markeredgecolor="black", markeredgewidth=0.4,
+               linestyle="None", markersize=6, label="AEM variance"),
+    ]
+
+leg = axes[1].legend(handles=handles, loc="lower left", frameon=True, framealpha=0.9,
+                     borderpad=0.6, handletextpad=0.6, fontsize=12, title="Pilot Point Sets", title_fontsize=14)
+
+plt.tight_layout()
+plt.savefig(plt_dir / "pilot_points_map.png", dpi=600, bbox_inches="tight")
 plt.show()
 
 # ----------------------------------------------------------------------------------------------------------------------
