@@ -197,3 +197,4 @@ cython_debug/
 04_Pest_setup/*
 *.fac
 05_Plots/*
+*.chk
