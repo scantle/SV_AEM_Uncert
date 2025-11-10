@@ -2,6 +2,7 @@ ptf $
 .\MODFLOW\SVIHM_intermediate.sfr
 .\MODFLOW\SVIHM.sfr
 .\MODFLOW\SVIHM.upw
+ 25.0
  2  440  210
 1	$ sbcm01          $
 2	$ sbcm02          $
