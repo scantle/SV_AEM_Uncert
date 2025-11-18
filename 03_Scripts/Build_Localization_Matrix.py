@@ -125,8 +125,10 @@ os.remove('temp.pst')  # immediate cleanup :)
 # so alas... update the pst object with the head weights
 hob_obs = pd.read_csv(data_dir / 'head_obs_master.csv', index_col='obsnme')
 hob_obs = hob_obs.rename({'obval': 'obsval', 'group': 'obgnme', 'stdev': 'standard_deviation'}, axis=1)
+sfr_obs = pd.read_csv(data_dir / 'streamflow_obs_std.csv', index_col='obsnme')
+sfr_obs = sfr_obs.rename({'obsgnme': 'obgnme'}, axis=1)  # I hate these abbreviations
 obs = pst.observation_data
-for df in [hob_obs]:
+for df in [hob_obs, sfr_obs]:
     df.index = df.index.str.lower()
     for col in ["obsval","weight","obgnme", "standard_deviation"]:
         if col in df.columns:
@@ -135,6 +137,11 @@ for df in [hob_obs]:
 # Stream NSE/KGE/RMSE not in observations
 obs.loc[obs.index.str.contains('nse|kge|rmse'), 'obsval'] = 1.0
 obs.loc[obs.index.str.contains('nse|kge|rmse'), 'weight'] = 0.0
+# Remove volume obs (not helpful)
+obs.loc[obs.obgnme.str.startswith('vol'),'weight'] = 0.0
+
+# Remove R18 avg (obs appear to be above ground)
+obs.loc[obs.obsnme=='r18_avg','weight'] = 0.0
 
 #----------------------------------------------------------------------------------------------------------------------#
 # Separate out Quartz Valley using a shapefile
@@ -155,6 +162,13 @@ obs_xy = (
 )
 obs_xy.index = obs_xy.index.str.lower()  # to appease pyemu
 obs_xy['quartz'] = [qtz_gdf.contains(Point(x, y))[0] for x, y in obs_xy[["x", "y"]].to_numpy()]
+
+# Keep only observations with non-zero weight in the PST
+nnz_obs_set = set(pst.nnz_obs_names)          # PST already reflects your weight edits
+pre_n = len(obs_xy)
+obs_xy = obs_xy.loc[obs_xy.index.isin(nnz_obs_set)].copy()
+if len(obs_xy) != pre_n:
+    print(f"Filtered zero-weight obs from localizer build: {pre_n - len(obs_xy)} dropped")
 
 # Get parameters in a specific format
 pars_xy = (
@@ -390,7 +404,7 @@ qa_plot_obs_influence("st201_avg", M, obs_xy, pars_xy, wmin=0.01)
 qa_plot_obs_influence("scv_11_avg", M, obs_xy, pars_xy, wmin=0.01)
 
 # Stream tests
-qa_plot_obs_influence("fj_2019-02_vol", M, obs_xy, pars_xy, wmin=0.01)  # should be everything
+qa_plot_obs_influence("fj_20191130", M, obs_xy, pars_xy, wmin=0.01)  # should be everything
 
 # Shackleford Creek
 qa_plot_obs_influence("sck_20071203", M, obs_xy, pars_xy, wmin=0.01)

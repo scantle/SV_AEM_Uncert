@@ -23,8 +23,8 @@ origin_date = pd.to_datetime('1990-9-30')
 kvme_pp_flag = False
 
 # Directories
-orig_dir = os.getcwd()
-pest_dir = Path("04_PEST_setup")   # TPL, INS
+orig_dir  = os.getcwd()
+pest_dir  = Path("04_PEST_setup")   # TPL, INS
 work_dir  = Path("C:/Projects/SVIHM/2025_R2P_PEST_Calib")  # build folder
 data_dir  = Path('01_Data')
 exe_dir   = Path('02_Models/Bin')
@@ -36,7 +36,7 @@ pestpp_exe = Path('C:/Users/lelan/Documents/Models/pestpp-5.2.16-iwin/bin/pestpp
 
 # After we have some runs...
 #base_par_update = Path('06_Outputs/02_still_timeouts_then_power_outage/svihm_ies.2.base.par')
-base_par_update = None
+base_par_update = None  #Path('06_Outputs/03_good_but_local/svihm_ies.3.base.par')
 
 # Out
 pst_file = 'svihm_ies.pst'
@@ -377,6 +377,16 @@ if obs.loc[obs.standard_deviation.isna(), :].count().max() > 0:
     print(obs.loc[obs.standard_deviation.isna(), :])
 
 #----------------------------------------------------------------------------------------------------------------------#
+# Weight Adjustments
+#----------------------------------------------------------------------------------------------------------------------#
+
+# Remove volume obs (not helpful)
+obs.loc[obs.obgnme.str.startswith('vol'),'weight'] = 0.0
+
+# Remove R18 avg (obs appear to be above ground)
+obs.loc[obs.obsnme=='r18_avg','weight'] = 0.0
+
+#----------------------------------------------------------------------------------------------------------------------#
 # Parameter Initial Values & Groups
 #----------------------------------------------------------------------------------------------------------------------#
 
@@ -432,9 +442,9 @@ if base_update_par is not None:
 nz = obs.loc[obs['weight'] > 0, 'obgnme'].astype(str).values
 tags = pd.unique(pd.Series([item.split('_')[0] for item in nz]))
 factor_df = pd.DataFrame({'weight': 0.0}, index=tags)
-factor_df.loc['hds', 'weight'] = 0.40
-factor_df.loc['str', 'weight'] = 0.35
-factor_df.loc['vol', 'weight'] = 0.25
+factor_df.loc['hds', 'weight'] = 0.5
+factor_df.loc['str', 'weight'] = 0.5
+#factor_df.loc['vol', 'weight'] = 0.25
 
 # Make sure we got em all...
 if factor_df['weight'].min() <= 0:
@@ -479,7 +489,7 @@ good_tex_pars, _ = t2p_par2par_chain(prior_pe)
 # --- ies options ---
 pst.model_command = [str(Path("forward_run.bat"))]
 pst.pestpp_options["ies_include_base"] = True
-pst.pestpp_options['ies_reg_factor'] = 0.025
+pst.pestpp_options['ies_reg_factor'] = 0.25
 pst.pestpp_options["ies_bad_phi_sigma"] = 2.0  # middle ground value
 pst.pestpp_options["ies_num_threads"] = 8
 pst.control_data.noptmax = -2
