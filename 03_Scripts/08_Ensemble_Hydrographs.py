@@ -14,10 +14,10 @@ from tqdm import tqdm
 #----------------------------------------------------------------------------------------------------------------------#
 
 data_dir = Path('01_Data/')
-f_dir = Path('06_Outputs/03_good_but_local/')
+f_dir = Path('06_Outputs/06_wtfx/')
 
 #par_file   = f_dir / "svihm_ies.2.par.csv"
-obs_file   = f_dir / "svihm_ies.3.obs.csv"
+obs_file   = f_dir / "svihm_ies.1.obs.csv"
 
 # Extract iteration number...
 iter = obs_file.name.split('.')[1]
@@ -25,7 +25,6 @@ iter = obs_file.name.split('.')[1]
 plt_dir = Path('05_Plots/') / f'{f_dir.name}_iter{iter}'
 hds_plot_dir = plt_dir / 'hds_plots'
 hds_plot_dir.mkdir(parents=True, exist_ok=True)
-
 
 head_obs_file = data_dir / 'head_obs_master.csv'
 str_obs_file = data_dir / 'streamflow_obs_std.csv'
@@ -105,6 +104,12 @@ str_obs.loc[mask_fj & (str_obs["date_tmp"] >= cutoff), "obsgnme"] = "str_FJ_post
 # Cleanup temp column
 str_obs.drop(columns=["date_tmp"], inplace=True)
 
+# A little reporting because it's hard to read through these files
+print(f"HDS R2: {run_results.loc['base','r2_heads']}")
+print(f"FJ lNSE: {run_results.loc['base','fj_nse']} lkge: {run_results.loc['base','fj_kge']}")
+print(f"AS lNSE: {run_results.loc['base','as_nse']} lkge: {run_results.loc['base','as_kge']}")
+print(f"BY lNSE: {run_results.loc['base','by_nse']} lkge: {run_results.loc['base','by_kge']}")
+print(f"SK lNSE: {run_results.loc['base','sck_nse']} lkge: {run_results.loc['base','sck_kge']}")
 
 #----------------------------------------------------------------------------------------------------------------------#
 # Plot streamflow groups
@@ -146,8 +151,8 @@ for g in str_groups:
     # Observed values and std dev
     y_obs  = sub["obsval"].values
     y_std  = sub["standard_deviation"].values
-    y_hi   = y_obs + 3.0 * y_std
-    y_lo   = y_obs - 3.0 * y_std
+    y_hi   = y_obs + 1.0 * y_std
+    y_lo   = y_obs - 1.0 * y_std
 
     # Separate base realization from the rest
     if "base" in sim.index:
@@ -179,9 +184,9 @@ for g in str_groups:
     # 3) Observed values (thick blue line)
     ax.plot(x,y_obs,color="C0",linewidth=1.0,label="observed", zorder=8)
 
-    # 4) ±3σ dashed blue lines
-    ax.plot(x, y_hi, color="C0", linestyle="--", linewidth=0.5, alpha=0.8, label="+3σ")
-    ax.plot(x,y_lo,color="C0",linestyle="--",linewidth=0.5,alpha=0.8,label="-3σ")
+    # 4) ±1σ dashed blue lines
+    ax.plot(x, y_hi, color="C0", linestyle="--", linewidth=0.5, alpha=0.8, label="+1σ")
+    ax.plot(x,y_lo,color="C0",linestyle="--",linewidth=0.5,alpha=0.8,label="-1σ")
 
     # Axes labels & title
     ax.set_xlabel("Date")
@@ -237,8 +242,8 @@ for g in vol_groups:
     x = sub["date"].values
     y_obs = sub["obsval"].values
     y_std = sub["standard_deviation"].values
-    y_hi = y_obs + 3*y_std
-    y_lo = y_obs - 3*y_std
+    y_hi = y_obs + 1*y_std
+    y_lo = y_obs - 1*y_std
 
     # Base vs ensemble
     if "base" in sim.index:
@@ -266,9 +271,9 @@ for g in vol_groups:
     # Observed
     ax.plot(x, y_obs, "C0-", lw=2, label="observed")
 
-    # ±3σ
-    ax.plot(x, y_hi, "C0--", lw=1, alpha=0.8, label="+3σ")
-    ax.plot(x, y_lo, "C0--", lw=1, alpha=0.8, label="-3σ")
+    # ±1σ
+    ax.plot(x, y_hi, "C0--", lw=1, alpha=0.8, label="+1σ")
+    ax.plot(x, y_lo, "C0--", lw=1, alpha=0.8, label="-1σ")
 
     ax.set_title(f"Volume Group: {g}")
     ax.set_ylabel("Volume (same units as obsval)")
@@ -312,9 +317,9 @@ for wid in tqdm(wells, total=len(wells), desc=f"Well:"):
     y_std_diff = sub["stdev"].values
     w_obs = sub["weight"].values
 
-    # ±3σ bands for differences
-    y_hi_diff = y_obs_diff + 3.0 * y_std_diff
-    y_lo_diff = y_obs_diff - 3.0 * y_std_diff
+    # ±1σ bands for differences
+    y_hi_diff = y_obs_diff + 1.0 * y_std_diff
+    y_lo_diff = y_obs_diff - 1.0 * y_std_diff
 
     # base vs ensemble for differences
     if "base" in sim_diff.index:
@@ -395,8 +400,8 @@ for wid in tqdm(wells, total=len(wells), desc=f"Well:"):
     if (~mask_wt).any():
         ax_diff.plot(x[~mask_wt], y_obs_diff[~mask_wt], "o", ms=4, mfc="none", mec="C0")
 
-    # ±3σ bands for differences
-    ax_diff.plot(x, y_hi_diff, "C0--", lw=1, alpha=0.8, label="+3σ (diff)")
+    # ±1σ bands for differences
+    ax_diff.plot(x, y_hi_diff, "C0--", lw=1, alpha=0.8, label="+1σ (diff)")
     ax_diff.plot(x, y_lo_diff, "C0--", lw=1, alpha=0.8)
 
     ax_diff.set_title(f"Head differences: {wid}")
@@ -445,8 +450,8 @@ for wid in tqdm(wells, total=len(wells), desc=f"Well:"):
     # observed avg + std dev (±1σ)
     ax_avg.hlines(avg_val, x0, x1, colors="C0", lw=2, label="obs avg")
     if avg_std is not None and not np.isnan(avg_std):
-        ax_avg.hlines(avg_val + 3*avg_std, x0, x1, colors="C0", linestyles="--", lw=1, alpha=0.8)
-        ax_avg.hlines(avg_val - 3*avg_std, x0, x1, colors="C0", linestyles="--", lw=1, alpha=0.8)
+        ax_avg.hlines(avg_val + 1*avg_std, x0, x1, colors="C0", linestyles="--", lw=1, alpha=0.8)
+        ax_avg.hlines(avg_val - 1*avg_std, x0, x1, colors="C0", linestyles="--", lw=1, alpha=0.8)
 
     ax_avg.set_xlim(x0, x1)
     ax_avg.set_xticks([])
@@ -456,12 +461,12 @@ for wid in tqdm(wells, total=len(wells), desc=f"Well:"):
     # shared legend
     legend_elements = [
         Line2D([0], [0], marker='o', color='C0', lw=0, markersize=5, label='obs'),
-        Line2D([0], [0], color='C0', ls="--", lw=1, label=f'obs ±3σ'),
+        Line2D([0], [0], color='C0', ls="--", lw=1, label=f'obs ±1σ'),
         Line2D([0], [0], color='k', lw=2, label='base'),
         Line2D([0], [0], color='0.7', lw=1, label=f'ensembles (n={n_ens})')
     ]
 
-    ax_diff.legend(legend_elements, ['obs', f'obs ±3σ', 'base', f'ensembles (n={n_ens})'],
+    ax_diff.legend(legend_elements, ['obs', f'obs ±1σ', 'base', f'ensembles (n={n_ens})'],
                    loc="upper left", bbox_to_anchor=(0, 1.02), ncol=1)
 
     fig.autofmt_xdate()

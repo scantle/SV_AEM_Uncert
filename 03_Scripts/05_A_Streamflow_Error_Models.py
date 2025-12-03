@@ -438,7 +438,7 @@ def make_obs_table(
     q_col: str = "q",
     sd_lin_col: str = "sd_lin",
     sd_log10_col: str = "sd_log10",
-    q_floor: float = 1e-12,     # protects logs
+    q_floor: float = 1e-1,     # protects logs
 ) -> pd.DataFrame:
     """
     Build an observation table ready to export:
@@ -540,6 +540,33 @@ def weights_regime_equalized(df, regime_col='regime', min_w=0.2, max_w=5.0):
     base = base / base.mean()
     w = base / base.mean()  # mean ≈ 1
     out['weight'] = w.clip(min_w, max_w)
+    return out
+
+#----------------------------------------------------------------------------------------------------------------------#
+
+def apply_weight_multipliers(obs_df: pd.DataFrame, wdf: pd.DataFrame) -> pd.DataFrame:
+    """
+    Multiply obs_df['weight'] by wmult from wdf, matching on obsnme
+    (case-insensitive). If no match, wmult defaults to 1.0.
+    """
+    out = obs_df.copy()
+
+    # normalize to lower case for joining
+    out['obsnme_lower'] = out['obsnme'].str.lower()
+    w = wdf.copy()
+    w['obsnme_lower'] = w['obsnme'].str.lower()
+
+    # left join to bring in wmult
+    out = out.merge(w[['obsnme_lower', 'wmult']], on='obsnme_lower', how='left')
+
+    # default no-entry multipliers to 1.0
+    out['wmult'] = out['wmult'].fillna(1.0)
+
+    # apply multipliers
+    out['weight'] = out['weight'] * out['wmult']
+
+    # clean up
+    out = out.drop(columns=['obsnme_lower', 'wmult'])
     return out
 
 #----------------------------------------------------------------------------------------------------------------------#
@@ -791,6 +818,27 @@ by_obs = make_obs_table(sd_df=by_daily_sd, gauge_id=streams[3], transform="log10
 by_obs['obsgnme'] = 'str_BY'
 
 #----------------------------------------------------------------------------------------------------------------------#
+# Adjust Weights
+#----------------------------------------------------------------------------------------------------------------------#
+
+# FJ is the priority
+fj_obs.loc[fj_obs.regime=='low', 'weight'] *= 2.5
+fj_obs.loc[fj_obs.regime=='inbank', 'weight'] *= 1
+
+# Weights from previous run weight analysis
+wdf = pd.read_csv(data_dir / "str_wmults.csv")
+
+# Apply weight multipliers to per-stream obs tables (case-insensitive on obsnme)
+fj_obs  = apply_weight_multipliers(fj_obs,  wdf)
+sck_obs = apply_weight_multipliers(sck_obs, wdf)
+as_obs  = apply_weight_multipliers(as_obs,  wdf)
+by_obs  = apply_weight_multipliers(by_obs,  wdf)
+
+# Remove weights on volume (just punishes the model for issues with the watershed balance)
+fj_month_vol['weight'] = 0.0
+fj_year_vol['weight'] = 0.0
+
+#----------------------------------------------------------------------------------------------------------------------#
 # Combine obs tables, write output file
 #----------------------------------------------------------------------------------------------------------------------#
 cols = ['obsnme', 'obsval', 'obsstd', 'weight','obsgnme']
@@ -798,7 +846,7 @@ all_obs = pd.concat([fj_obs[cols], fj_month_vol[cols], fj_year_vol[cols], sck_ob
 
 all_obs.rename({'obsstd': 'standard_deviation'}, axis=1, inplace=True)
 
-all_obs.to_csv(out_dir / 'streamflow_obs_std.csv', index=False)
+all_obs.to_csv(out_dir / 'streamflow_obs_std.csv')
 
 # Write INS files
 write_ts_ins_file(fj_obs, origin_date,0, pest_dir /'Streamflow_FJ_SVIHM_MidptFlow_LOG.ins', markers='w')

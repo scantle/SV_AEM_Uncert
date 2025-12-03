@@ -42,10 +42,23 @@ wt_dict = {'N2': ['after_date', pd.to_datetime('01/01/2019')],   # outlier remov
            'ST888': ['rolling_median', 1.0,  60, 0.0],  # Smooth to remove high-frequency oscillations
            'ST987': ['rolling_median', 1.0, 180, 0.0],  # Smooth to remove high-frequency oscillations
            'ST655': ['after_date', pd.to_datetime('10/01/1990')],  # Too close to model edge
-           'ST202': ['after_date', pd.to_datetime('10/01/1990')],  # Too close to model edge
+           'L32' : ['after_date', pd.to_datetime('10/01/1990')],  # Too close to model edge, datum change issue?
+           'QV19' : ['after_date', pd.to_datetime('10/01/1990')],  # Very little data, hard to hit, not best well in area (see QV17,QV18)
+           'QV04' : ['after_date', pd.to_datetime('10/01/1990')],  # Very little data, hard to hit, not best well in area (see QV17,QV18)
            #'G40'  : ['after_date', pd.to_datetime('10/01/1990')],  # Too close to model edge (but let's try it)
            #'N15'  : ['after_date', pd.to_datetime('10/01/1990')],  # Too close to model edge (but let's try it)
           }
+
+drop_avg = ['R18',  # observations above surface level
+            'F56',  # near model edge and near a stream - avg hard to hit, somewhat conflicts with ST186, etc, nearby
+            'QV14',  # Elevation seems to conflict with nearby Q12 - datum issue?
+            'K22',  # Conflicted, previous versions of model struggled as well - datum issue?
+            'W31',  # Conflicts (avg too low) with ST192, M12
+            ]
+
+drop_diff = ['SCV_5',  # too close to model edge, but avg is useful
+             'ST202',  # too close to model edge, but avg is useful
+            ]
 
 # Don't show hydrographs
 plt.ioff()
@@ -206,6 +219,7 @@ def build_head_obs_sets_weighted(
     df: pd.DataFrame,
     vertical_pairs: List[Tuple[str, str]],
     base_sigma: float = 1.0,
+    max_avg_weight: float = 1.0,
     value_col: str = "obsval",
     time_key: str = "date",
     weight_col: str = "wt",
@@ -298,8 +312,8 @@ def build_head_obs_sets_weighted(
     avg_rows["group"]  = "hds_avg"
     avg_rows["obval"]  = avg_rows["well_wmean"]
     avg_rows["stdev"]  = avg_rows["sigma_mean"]
-    # AVG weight: cap at 1.0; wells with sumw==0 get 0 weight
-    avg_rows["weight"] = avg_rows["sumw"].clip(upper=1.0)
+    # AVG weight: cap at max_avg_weight; wells with sumw==0 get 0 weight
+    avg_rows["weight"] = avg_rows["sumw"].clip(upper=max_avg_weight)
     avg_rows.loc[avg_rows["sumw"].fillna(0) <= 0, "weight"] = 0.0
     avg_rows["date"]   = pd.NaT
     avg_rows = avg_rows[["obsnme", "group", "obval", "stdev", "weight", "wellid", "date"]]
@@ -443,8 +457,8 @@ hobs_w = calculate_hob_weights(
     wt_dict=wt_dict,
     bas=gwf.bas6,
     out_dir=plot_dir,
-    by_well=False,
-    default_weight=1.0,
+    by_well=True,
+    default_weight=10.0,
     min_points=3,
 )
 
@@ -452,11 +466,19 @@ hobs_w = calculate_hob_weights(
 obs_master = build_head_obs_sets_weighted(
     hobs_w,
     vertical_pairs=vertical_well_pairs,
-    base_sigma=1.0,          # your assumed single-measurement std dev (m)
+    base_sigma=1.0,          # assumed single-measurement std dev (m)
+    max_avg_weight=2.0,
     value_col="obsval",
     time_key="date",
     weight_col="wt",
 )
+
+# Remove diffs/avg we've decided to drop
+for w in drop_avg:
+    obs_master.loc[obs_master.obsnme==f'{w}_AVG','weight'] = 0.0
+
+for w in drop_diff:
+    obs_master.loc[(obs_master.wellid == w) & (obs_master.group == 'hds_diff'), 'weight'] = 0.0
 
 # Add in our r^2 dummy observation
 r2_row = pd.DataFrame([{

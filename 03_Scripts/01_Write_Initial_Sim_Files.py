@@ -162,7 +162,7 @@ rho_dict = {int(k): np.array(v) for k, v in rho_dict.items()}
 cluster_names = ['1 - Fine-grained', '2 - Mixed Fine', '3 - Sand', '4 - Mixed Coarse', '5 - Very Coarse']
 tex_names = [name.split('-')[1].strip().replace(' ', '_') for name in cluster_names]
 
-plt.style.use('seaborn-v0_8-colorblind')
+plt.style.use('seaborn-v0_8')
 hplt, hax = plt.subplots(figsize=(12, 8))
 fit_dists = {}
 hax.grid(which='both', linestyle='-', linewidth='0.5', color='lightgrey')
@@ -188,7 +188,7 @@ hax.set_xlabel(r'Resistivity (log scale), $\rho\, [\Omega\cdot\mathrm{m}]$', fon
 hax.set_ylabel('Density', fontsize=15)
 leg = hax.legend(fontsize=13, title='Texture Clusters', title_fontsize=15)
 hplt.tight_layout()
-plt.savefig(plt_dir / '01_histogram_resistivity_clusters.png', dpi=300, bbox_inches='tight')
+plt.savefig(plt_dir / '01_histogram_resistivity_clusters_modelingreport.png', dpi=300, bbox_inches='tight')
 
 with open(data_dir / 'lognorm_dist_clustered.par', 'w') as f:
     f.write(f"{len(fit_dists.keys())}    # Number of texture classes\n")

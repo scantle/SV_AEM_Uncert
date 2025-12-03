@@ -35,8 +35,11 @@ pest_exe_dir = Path('C:/Users/lelan/Documents/Models/pest17')
 pestpp_exe = Path('C:/Users/lelan/Documents/Models/pestpp-5.2.16-iwin/bin/pestpp-ies.exe')
 
 # After we have some runs...
-#base_par_update = Path('06_Outputs/02_still_timeouts_then_power_outage/svihm_ies.2.base.par')
-base_par_update = None  #Path('06_Outputs/03_good_but_local/svihm_ies.3.base.par')
+
+#base_par_update = Path('06_Outputs/05_novolt_drnostreams/svihm_ies.2.base.par')
+#base_par_update = Path('C:/Projects/SVIHM/2025_R2P_PEST_Calib_manual_runs/pst04_iter01_goodpars/svihm_ies.base.par')
+base_par_update = Path('06_Outputs/06_wtfx/svihm_ies.1.base.par')
+#base_par_update = None
 
 # Out
 pst_file = 'svihm_ies.pst'
@@ -380,11 +383,7 @@ if obs.loc[obs.standard_deviation.isna(), :].count().max() > 0:
 # Weight Adjustments
 #----------------------------------------------------------------------------------------------------------------------#
 
-# Remove volume obs (not helpful)
-obs.loc[obs.obgnme.str.startswith('vol'),'weight'] = 0.0
 
-# Remove R18 avg (obs appear to be above ground)
-obs.loc[obs.obsnme=='r18_avg','weight'] = 0.0
 
 #----------------------------------------------------------------------------------------------------------------------#
 # Parameter Initial Values & Groups
@@ -439,22 +438,25 @@ if base_update_par is not None:
 # Weight balancing
 #----------------------------------------------------------------------------------------------------------------------#
 
-nz = obs.loc[obs['weight'] > 0, 'obgnme'].astype(str).values
-tags = pd.unique(pd.Series([item.split('_')[0] for item in nz]))
-factor_df = pd.DataFrame({'weight': 0.0}, index=tags)
-factor_df.loc['hds', 'weight'] = 0.5
-factor_df.loc['str', 'weight'] = 0.5
-#factor_df.loc['vol', 'weight'] = 0.25
-
-# Make sure we got em all...
-if factor_df['weight'].min() <= 0:
-    print('Not all factor weights set...')
-if factor_df['weight'].sum() > 1:
-    print('Factor weights add up too high!')
-
-# write it out
-factor_df.to_csv('factor_weights.dat', header=False)
-pst.pestpp_options["ies_phi_factor_file"] = "factor_weights.dat"
+# nz = obs.loc[obs['weight'] > 0, 'obgnme'].astype(str).values
+# tags = ['hds','str_fj']
+# factor_df = pd.DataFrame({'weight': 0.0}, index=tags)
+# factor_df.loc['hds', 'weight'] = 0.3
+# factor_df.loc['str_fj', 'weight'] = 0.35
+# factor_df.loc['str_as', 'weight'] = .1
+# factor_df.loc['str_by', 'weight'] = .1
+# factor_df.loc['str_sck', 'weight'] = .15
+# #factor_df.loc['vol', 'weight'] = 0.25
+#
+# # Make sure we got em all...
+# if factor_df['weight'].min() <= 0:
+#     print('Not all factor weights set...')
+# if factor_df['weight'].sum() > 1:
+#     print('Factor weights add up too high!')
+#
+# # write it out
+# factor_df.to_csv('factor_weights.dat', header=False)
+# pst.pestpp_options["ies_phi_factor_file"] = "factor_weights.dat"
 
 #----------------------------------------------------------------------------------------------------------------------#
 # Parameter Covariance
@@ -492,9 +494,9 @@ pst.pestpp_options["ies_include_base"] = True
 pst.pestpp_options['ies_reg_factor'] = 0.25
 pst.pestpp_options["ies_bad_phi_sigma"] = 2.0  # middle ground value
 pst.pestpp_options["ies_num_threads"] = 8
-pst.control_data.noptmax = -2
+pst.control_data.noptmax = -1
 pst.pestpp_options["ies_enforce_bounds"] = True
-pst.pestpp_options["overdue_giveup_fac"] = 2
+pst.pestpp_options["overdue_giveup_fac"] = 3
 
 # Localization
 pst.pestpp_options["ies_localizer"] = "localizer.jcb"

@@ -137,11 +137,6 @@ for df in [hob_obs, sfr_obs]:
 # Stream NSE/KGE/RMSE not in observations
 obs.loc[obs.index.str.contains('nse|kge|rmse'), 'obsval'] = 1.0
 obs.loc[obs.index.str.contains('nse|kge|rmse'), 'weight'] = 0.0
-# Remove volume obs (not helpful)
-obs.loc[obs.obgnme.str.startswith('vol'),'weight'] = 0.0
-
-# Remove R18 avg (obs appear to be above ground)
-obs.loc[obs.obsnme=='r18_avg','weight'] = 0.0
 
 #----------------------------------------------------------------------------------------------------------------------#
 # Separate out Quartz Valley using a shapefile
@@ -399,7 +394,7 @@ def qa_plot_obs_influence(obs_name, M, obs_xy, pars_xy, wmin=1e-6, annotate_top=
 
 # HDS Tests
 qa_plot_obs_influence("d31_avg", M, obs_xy, pars_xy, wmin=0.01)
-qa_plot_obs_influence("qv04_avg", M, obs_xy, pars_xy, wmin=0.01)
+qa_plot_obs_influence("qv17_avg", M, obs_xy, pars_xy, wmin=0.01)
 qa_plot_obs_influence("st201_avg", M, obs_xy, pars_xy, wmin=0.01)
 qa_plot_obs_influence("scv_11_avg", M, obs_xy, pars_xy, wmin=0.01)
 
@@ -407,7 +402,7 @@ qa_plot_obs_influence("scv_11_avg", M, obs_xy, pars_xy, wmin=0.01)
 qa_plot_obs_influence("fj_20191130", M, obs_xy, pars_xy, wmin=0.01)  # should be everything
 
 # Shackleford Creek
-qa_plot_obs_influence("sck_20071203", M, obs_xy, pars_xy, wmin=0.01)
+qa_plot_obs_influence("sck_20070903", M, obs_xy, pars_xy, wmin=0.01)
 
 #----------------------------------------------------------------------------------------------------------------------#
 # QA/QC - from pars

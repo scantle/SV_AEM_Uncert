@@ -16,7 +16,7 @@ parser.add_argument("streamflow_file", type=str, help="SFR Output Reach file")
 parser.add_argument("column", type=str, help="SFR Output Column")
 parser.add_argument("--obs-csv", type=str, help="Path to obs CSV. If provided, metrics are computed.")
 
-offset = 1e-12  # same as 05_A_Streamflow_Error_Models.py
+offset = 1e-1  # same as 05_A_Streamflow_Error_Models.py
 
 origin_date = pd.to_datetime('1990-9-30')
 
