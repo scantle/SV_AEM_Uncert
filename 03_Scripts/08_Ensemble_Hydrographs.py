@@ -17,7 +17,7 @@ data_dir = Path('01_Data/')
 f_dir = Path('06_Outputs/06_wtfx/')
 
 #par_file   = f_dir / "svihm_ies.2.par.csv"
-obs_file   = f_dir / "svihm_ies.1.obs.csv"
+obs_file   = f_dir / "svihm_ies.3.obs.csv"
 
 # Extract iteration number...
 iter = obs_file.name.split('.')[1]

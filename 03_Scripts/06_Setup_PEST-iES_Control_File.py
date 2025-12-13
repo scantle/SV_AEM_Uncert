@@ -38,8 +38,11 @@ pestpp_exe = Path('C:/Users/lelan/Documents/Models/pestpp-5.2.16-iwin/bin/pestpp
 
 #base_par_update = Path('06_Outputs/05_novolt_drnostreams/svihm_ies.2.base.par')
 #base_par_update = Path('C:/Projects/SVIHM/2025_R2P_PEST_Calib_manual_runs/pst04_iter01_goodpars/svihm_ies.base.par')
-base_par_update = Path('06_Outputs/06_wtfx/svihm_ies.1.base.par')
-#base_par_update = None
+# base_par_update = Path('06_Outputs/06_wtfx/svihm_ies.3.base.par')
+base_par_update = None
+
+ensb_par_update = Path('06_Outputs/06_wtfx/svihm_ies.3.par.csv')
+ensb_num = 0
 
 # Out
 pst_file = 'svihm_ies.pst'
@@ -278,6 +281,10 @@ if base_par_update is not None:
 else:
     base_update_par = None
 
+if ensb_par_update is not None:
+    # Read the ensemble parameter file (rows = realizations, cols = parameters)
+    ens_pe = pd.read_csv(ensb_par_update, index_col=0)
+
 #----------------------------------------------------------------------------------------------------------------------#
 # File Management
 #----------------------------------------------------------------------------------------------------------------------#
@@ -432,6 +439,28 @@ if base_update_par is not None:
     par.loc[base_update_par.index, "parval1"] = base_update_par['parval1']
     par_updated = par.loc[base_update_par.index, "parval1"].shape[0]
     print(f'Updated {par_updated} / {par.shape[0]} parameters from {base_par_update.name}.')
+    print(t2p_par2par_frompar(par))
+elif ensb_par_update is not None:
+
+    # Realization IDs are often strings, so normalize to str for safety
+    ens_pe.index = ens_pe.index.astype(str)
+
+    target_real = str(ensb_num)
+    if target_real not in ens_pe.index:
+        raise ValueError(f"Ensemble member {ensb_num} not found in {ensb_par_update}.")
+
+    # Grab the row for the chosen ensemble member
+    ens_row = ens_pe.loc[target_real]
+
+    # Make sure parameter names align with pst.parameter_data index
+    # (par index is already lower-case; enforce the same for columns)
+    ens_row.index = ens_row.index.str.lower()
+
+    common = par.index.intersection(ens_row.index)
+
+    par.loc[common, "parval1"] = ens_row.loc[common].values
+    print(f"Updated {len(common)} parameters from ensemble member {ensb_num} "
+          f"({ensb_par_update.name}).")
     print(t2p_par2par_frompar(par))
 
 #----------------------------------------------------------------------------------------------------------------------#

@@ -441,11 +441,37 @@ def _remove_axes_clutter(ax):
     for spine in ax.spines.values():
         spine.set_visible(False)
 
-def _draw_active_boundary(ax, layer_idx):
+def _draw_active_boundary(ax, layer_idx, facecolor="white", alpha=0.8):
     mask = (ib[layer_idx, :, :] > 0)
     poly = active_polygon_from_mask(mg, mask)
-    if not poly.is_empty:
-        gpd.GeoSeries([poly]).boundary.plot(ax=ax, color="black", linewidth=0.6, zorder=2)
+
+    if poly.is_empty:
+        return
+
+    # --- keep only the main outer polygon for filling ---
+    if poly.geom_type == "MultiPolygon":
+        # e.g., largest polygon by area
+        outer = max(poly.geoms, key=lambda g: g.area)
+    else:
+        outer = poly
+
+    # Fill only the outer polygon
+    gpd.GeoSeries([outer]).plot(
+        ax=ax,
+        facecolor=facecolor,
+        edgecolor="black",
+        linewidth=0.6,
+        alpha=alpha,
+        zorder=1,
+    )
+
+    # Optionally: draw *all* boundaries (including the interior polygon) as outlines only
+    gpd.GeoSeries([poly]).boundary.plot(
+        ax=ax,
+        color="black",
+        linewidth=0.6,
+        zorder=2,
+    )
 
 def _north_arrow(ax, xy=(0.92, 0.12)):
     # simple north arrow in axes coords
@@ -549,7 +575,7 @@ leg = axes[1].legend(handles=handles, loc="lower left", frameon=True, framealpha
                      borderpad=0.6, handletextpad=0.6, fontsize=12, title="Pilot Point Sets", title_fontsize=14)
 
 plt.tight_layout()
-plt.savefig(plt_dir / "pilot_points_map.png", dpi=600, bbox_inches="tight")
+plt.savefig(plt_dir / "pilot_points_map.png", dpi=600, bbox_inches="tight", transparent=True)
 plt.show()
 
 # ----------------------------------------------------------------------------------------------------------------------
