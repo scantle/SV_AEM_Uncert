@@ -2,7 +2,6 @@ import os
 import numpy as np
 import pandas as pd
 import pyemu
-from pyemu.utils import geostats
 import flopy
 from tqdm import tqdm
 from pathlib import Path
