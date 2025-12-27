@@ -19,11 +19,13 @@ f_dir = Path('06_Outputs/06_wtfx/')
 
 #par_file   = f_dir / "svihm_ies.2.par.csv"
 obs_file   = f_dir / "svihm_ies.3.obs.csv"
+natveg_high_file = f_dir / 'svihm_natveg_high.csv'
+natveg_low_file = f_dir / 'svihm_natveg_low.csv'
 
 # Extract iteration number...
 iter = obs_file.name.split('.')[1]
 
-plt_dir = Path('05_Plots/') / f'{f_dir.name}_iter{iter}'
+plt_dir = Path('05_Plots/') / f'{f_dir.name}_iter{iter}' / 'natveg'
 hds_plot_dir = plt_dir / 'hds_plots'
 hds_plot_dir.mkdir(parents=True, exist_ok=True)
 
@@ -88,16 +90,17 @@ head_obs = pd.read_csv(head_obs_file)
 head_obs["date"] = pd.to_datetime(head_obs["date"])
 str_obs = pd.read_csv(str_obs_file)
 
-# PEST iteration results
+# PEST iteration & scenario results
 run_results = pd.read_csv(obs_file, dtype={"real_name": str}, index_col=['real_name'])
+nvh_results = pd.read_csv(natveg_high_file, dtype={"run_id": str, 'input_run_id': str}, index_col=['input_run_id'])
+nvl_results = pd.read_csv(natveg_low_file,  dtype={"run_id": str, 'input_run_id': str}, index_col=['input_run_id'])
 
 # Make column names case-insensitive
 run_results.columns = run_results.columns.str.lower()
+nvh_results.columns = nvh_results.columns.str.lower()
+nvl_results.columns = nvl_results.columns.str.lower()
 str_obs["obsnme_lower"] = str_obs["obsnme"].str.lower()
 head_obs["obsnme_lower"] = head_obs["obsnme"].str.lower()
-
-
-# Little trick to get FJ streamflow into two groups for better plots
 
 # Split FJ daily flows at Oct 1, 2010
 mask_fj = str_obs["obsgnme"] == "str_FJ"
@@ -109,20 +112,8 @@ str_obs.loc[mask_fj, "date_tmp"] = pd.to_datetime(
     format="%Y%m%d"
 )
 
-# Split into two pseudo-groups
-# cutoff = pd.Timestamp("2010-10-01")
-# str_obs.loc[mask_fj & (str_obs["date_tmp"] < cutoff),  "obsgnme"] = "str_FJ_pre2010"
-# str_obs.loc[mask_fj & (str_obs["date_tmp"] >= cutoff), "obsgnme"] = "str_FJ_post2010"
-
 # Cleanup temp column
 str_obs.drop(columns=["date_tmp"], inplace=True)
-
-# A little reporting because it's hard to read through these files
-print(f"HDS R2: {run_results.loc['base','r2_heads']}")
-print(f"FJ lNSE: {run_results.loc['base','fj_nse']} lkge: {run_results.loc['base','fj_kge']}")
-print(f"AS lNSE: {run_results.loc['base','as_nse']} lkge: {run_results.loc['base','as_kge']}")
-print(f"BY lNSE: {run_results.loc['base','by_nse']} lkge: {run_results.loc['base','by_kge']}")
-print(f"SK lNSE: {run_results.loc['base','sck_nse']} lkge: {run_results.loc['base','sck_kge']}")
 
 #----------------------------------------------------------------------------------------------------------------------#
 # Plot streamflow groups
@@ -157,6 +148,8 @@ for g in str_groups:
 
     # Extract simulated values for these obs (all realizations)
     sim = run_results[obs_cols]
+    rvh_sim = nvh_results[obs_cols]
+    rvl_sim = nvl_results[obs_cols]
 
     # X-axis
     x = sub["date"].values
@@ -168,12 +161,12 @@ for g in str_groups:
     y_lo   = y_obs - 1.0 * y_std
 
     # Separate base realization from the rest
-    if "base" in sim.index:
-        base_sim = 10**sim.loc["base"].values
-        ens_sim  = sim.drop(index="base")
-    else:
-        base_sim = None
-        ens_sim  = sim
+    base_sim = 10**sim.loc["base"].values
+    base_rvh = 10**rvh_sim.loc['base'].values
+    base_rvl = 10 ** rvl_sim.loc['base'].values
+    ens_sim  = sim.drop(index="base")
+    ens_rvh = rvh_sim.drop(index="base")
+    ens_rvl = rvl_sim.drop(index="base")
 
     n_ens = ens_sim.shape[0]
 
@@ -185,17 +178,19 @@ for g in str_groups:
 
     # 1) Ensemble members (thin gray lines)
     for rname, row in ens_sim.iterrows():
-        ax.plot(x, 10**row.values, color="0.7", linewidth=0.5, alpha=0.6)
-    if n_ens > 0:
-        ax.plot([], [], color="0.7", linewidth=0.5, alpha=0.6,
-                label=f"ensemble members (n={n_ens})")
+        ax.plot(x, 10**row.values, color="0.7", linewidth=0.5, alpha=0.3)
+    for rname, row in ens_rvh.iterrows():
+        ax.plot(x, 10**row.values, color="lightgreen", linewidth=0.5, alpha=0.3)
+    for rname, row in ens_rvl.iterrows():
+        ax.plot(x, 10 ** row.values, color="gold", linewidth=0.5, alpha=0.3)
 
     # 2) Base realization (thick black line)
-    if base_sim is not None:
-        ax.plot(x,base_sim,color="k",linewidth=1.0,label="base realization", zorder=10)
+    ax.plot(x,base_sim,color="k",linewidth=0.7,label="base realization", zorder=10)
+    ax.plot(x,base_rvh,color="g",linewidth=0.7,label="nat. veg. high base realization", zorder=10)
+    ax.plot(x, base_rvl, color="tab:orange", linewidth=0.7, label="nat. veg. low base realization", zorder=10)
 
     # 3) Observed values (thick blue line)
-    ax.plot(x,y_obs,color="C0",linewidth=1.0,label="observed", zorder=8)
+    ax.plot(x,y_obs,color="C0",linewidth=0.7,label="observed", zorder=8)
 
     # 4) ±1σ dashed blue lines
     #ax.plot(x, y_hi, color="C0", linestyle="--", linewidth=0.5, alpha=0.8, label="+1σ")
@@ -216,96 +211,12 @@ for g in str_groups:
     plt.tight_layout()
 
     # Save
-    out_name = f"{g}_streamflow_ensemble.png"
+    out_name = f"{g}_streamflow_ensemble_natveg.png"
     out_path = plt_dir / out_name
     fig.savefig(out_path, dpi=300)
     plt.close(fig)
 
     print(f"Saved {out_path}")
-
-#------------------------------------------------------------#
-# Volume groups
-#------------------------------------------------------------#
-
-vol_groups = [g for g in str_obs["obsgnme"].unique() if str(g).startswith("vol_")]
-
-for g in vol_groups:
-    sub = str_obs.loc[str_obs["obsgnme"] == g].copy()
-
-    if g == "vol_FJ_month":
-        sub["date"] = sub["obsnme"].apply(parse_monthly_date)
-    elif g == "vol_FJ_year":
-        sub["date"] = sub["obsnme"].apply(parse_yearly_date)
-    else:
-        print(f"[WARN] no parser for group {g}")
-        continue
-
-    sub = sub.dropna(subset=["date"])
-    sub = sub.sort_values("date")
-
-    # Match to simulation columns
-    obs_cols = sorted(set(sub["obsnme_lower"]) & set(run_results.columns))
-    if len(obs_cols) == 0:
-        print(f"[WARN] no matching obs in run_results for {g}")
-        continue
-
-    sub = sub[sub["obsnme_lower"].isin(obs_cols)]
-    obs_cols = sub["obsnme_lower"].tolist()  # preserve date order
-
-    sim = run_results[obs_cols]
-
-    # Observations
-    x = sub["date"].values
-    y_obs = sub["obsval"].values
-    y_std = sub["standard_deviation"].values
-    y_hi = y_obs + 1*y_std
-    y_lo = y_obs - 1*y_std
-
-    # Base vs ensemble
-    if "base" in sim.index:
-        base_sim = sim.loc["base"].values
-        ens_sim = sim.drop(index="base")
-    else:
-        base_sim = None
-        ens_sim = sim
-
-    n_ens = ens_sim.shape[0]
-
-    # Plot
-    fig, ax = plt.subplots(figsize=(12,8))
-
-    # All ensemble members
-    for _, row in ens_sim.iterrows():
-        ax.plot(x, row.values, color="0.7", lw=0.5, alpha=0.5)
-    if n_ens > 0:
-        ax.plot([], [], color="0.7", lw=0.5, alpha=0.5, label=f"ensemble (n={n_ens})")
-
-    # Base member
-    if base_sim is not None:
-        ax.plot(x, base_sim, "k-", lw=2, label="base realization")
-
-    # Observed
-    ax.plot(x, y_obs, "C0-", lw=2, label="observed")
-
-    # ±1σ
-    #ax.plot(x, y_hi, "C0--", lw=1, alpha=0.8, label="+1σ")
-    #ax.plot(x, y_lo, "C0--", lw=1, alpha=0.8, label="-1σ")
-
-    ax.set_xlim(x.min(), x.max())
-    ax.margins(x=0)
-
-    ax.set_title(f"Volume Group: {g}")
-    ax.set_ylabel("Volume (same units as obsval)")
-    ax.set_xlabel("Date")
-    ax.legend()
-    fig.autofmt_xdate()
-    plt.tight_layout()
-
-    out = plt_dir / f"{g}_ensemble_volume.png"
-    fig.savefig(out, dpi=300)
-    plt.close(fig)
-
-    print(f"Saved {out}")
 
 #----------------------------------------------------------------------------------------------------------------------#
 # Plot heads

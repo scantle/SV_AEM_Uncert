@@ -18,7 +18,7 @@ model_name = 'SVIHM'
 # Directories
 orig_dir  = os.getcwd()
 pest_dir  = Path("C:/Projects/SVIHM/2025_R2P_PEST_Calib")  # previous build folder
-work_dir  = Path("C:/Projects/SVIHM/2025_Calib_iter3_natveg_high")  # build folder
+work_dir  = Path("C:/Projects/SVIHM/2025_Calib_iter3_natveg_low")  # build folder
 data_dir  = Path('01_Data')
 #exe_dir   = Path('02_Models/Bin')
 scpt_dir  = Path('03_Scripts/')

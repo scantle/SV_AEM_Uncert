@@ -1,6 +1,8 @@
 import matplotlib
 matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
+from matplotlib import font_manager as fm
 import seaborn as sns
 import numpy as np
 import pandas as pd
@@ -14,6 +16,8 @@ data_dir = Path('01_Data/')
 out_dir  = data_dir
 pest_dir = Path("04_PEST_setup")   # TPL, INS
 mf_dir = Path("02_Models/SVIHM_MF_working/MODFLOW/")
+plt_dir = Path("05_Plots/strflw_error/")
+plt_dir.mkdir(parents=True, exist_ok=True)
 
 streams = ['FJ','SCK','AS','BY']
 stream_files = ['FJ (USGS 11519500) Daily Flow, 1990-10-01_2025-08-31.csv',
@@ -52,6 +56,11 @@ cfs_to_m3d = (0.3048)**3 * 86400
 np.random.seed(667)
 
 origin_date = pd.to_datetime('1990-9-30')
+
+# unit conversions
+def f_m3d_to_cfs(y): return np.asarray(y) / cfs_to_m3d
+def f_cfs_to_m3d(y): return np.asarray(y) * cfs_to_m3d
+
 
 #----------------------------------------------------------------------------------------------------------------------#
 # Classes/Functions
@@ -339,50 +348,147 @@ def stat_plots(daily_sd):
 
 #----------------------------------------------------------------------------------------------------------------------#
 
-def uncert_hydrograph(daily_sd, start=None, end=None, name="", freq="D", logy=False):
+def uncert_hydrograph(
+    daily_sd: pd.DataFrame,
+    start=None,
+    end=None,
+    name="",
+    freq="D",
+    logy=False,
+    q_col="q",
+    sd_col="sd_lin",
+    date_col="date",
+    regime_col="regime",
+    figsize=(10, 4),
+    dpi=300,
+):
     """
-    Plot hydrograph with ± sd_lin band, without visually interpolating across missing days.
-    We reindex onto a complete daily range so gaps remain gaps (NaNs).
+    Plot hydrograph with ±sd band and no visual interpolation across missing days.
+
+    Features:
+      - Montserrat font (fallback if not installed)
+      - Secondary y-axis in CFS
+      - Regime-derived threshold between low & in-bank flow (dotted, in legend)
+      - Gridlines + cleaner axes styling
     """
+
+    font_family = "DejaVu Sans"
+
+    plt.rcParams.update({
+        "font.family": font_family,
+        # "font.size": 10,
+        # "axes.titlesize": 11,
+        # "axes.labelsize": 10,
+        # "legend.fontsize": 9,
+        # "xtick.labelsize": 9,
+        # "ytick.labelsize": 9,
+        "figure.dpi": dpi,
+        "savefig.dpi": dpi,
+        # "axes.linewidth": 0.8,
+    })
+
     df = daily_sd.copy()
-    df = df.sort_values('date').set_index('date')
+    df[date_col] = pd.to_datetime(df[date_col])
+    df = df.sort_values(date_col).set_index(date_col)
 
     # Determine plotting window
-    if start is None:
-        start = df.index.min()
-    else:
-        start = pd.to_datetime(start)
-    if end is None:
-        end = df.index.max()
-    else:
-        end = pd.to_datetime(end)
+    start = df.index.min() if start is None else pd.to_datetime(start)
+    end   = df.index.max() if end   is None else pd.to_datetime(end)
 
-    # Full daily index and reindex to insert NaNs on missing days
+    # Reindex onto full range so missing days become NaNs (gap-preserving)
     full = pd.date_range(start, end, freq=freq)
     df = df.reindex(full)
 
-    # Build mask where both q and sd are present
-    q = df['q']
-    sd = df['sd_lin']
+    q = df[q_col]
+    sd = df[sd_col] if sd_col in df.columns else pd.Series(index=df.index, dtype=float)
     valid = q.notna() & sd.notna()
 
-    fig, ax = plt.subplots(1, 1, figsize=(10, 4))
-    # Line breaks at NaNs automatically
-    ax.plot(df.index, q, label='Q (m³/d)', linewidth=1)
+    fig, ax = plt.subplots(1, 1, figsize=figsize, dpi=dpi)
 
-    # Uncertainty band only where valid data exist (no interpolation)
-    ax.fill_between(df.index, (q - sd), (q + sd),
-                    where=valid, alpha=0.3, label='± sd_lin', interpolate=False)
+    # Main line (breaks automatically at NaNs)
+    ax.plot(df.index, q, linewidth=1.0, label="Obs. Streamflow")
 
+    # Uncertainty band only where valid (no interpolation)
+    ax.fill_between(
+        df.index,
+        (q - sd),
+        (q + sd),
+        where=valid,
+        alpha=0.25,
+        interpolate=False,
+        label="± 1σ",
+    )
+
+    # Log scale (guard against <=0)
     if logy:
-        ax.set_yscale('log')
+        ax.set_yscale("log")
+        # avoid fill/line blowing up visually if negative/zero exist
+        # ymin = np.nanmin(q[q > 0]) if np.any(q > 0) else None
+        # if ymin is not None:
+        #     ax.set_ylim(bottom=ymin * 0.1)
 
-    ax.set_title(f'{name} Streamflow ± Std. Dev.')
+    # --- Regime threshold line (between "low" and "in-bank") ---
+    thr = None
+    if regime_col in df.columns:
+        reg = df[regime_col].astype(str).str.lower()
+
+        # heuristics: accept a range of common labels
+        low_mask = reg.str.contains("low")
+        inb_mask = reg.str.contains("in") | reg.str.contains("bank") | reg.str.contains("inbank")
+
+        q_low = q[low_mask & q.notna()]
+        q_inb = q[inb_mask & q.notna()]
+
+        low_max = q_low.max() if len(q_low) else np.nan
+        inb_min = q_inb.min() if len(q_inb) else np.nan
+
+        if np.isfinite(low_max) and np.isfinite(inb_min):
+            thr = 0.5 * (low_max + inb_min)
+        elif np.isfinite(inb_min):
+            thr = inb_min
+        elif np.isfinite(low_max):
+            thr = low_max
+
+    thr_label = f"Low flow threshold"
+    if thr is not None and np.isfinite(thr):
+        ax.axhline(
+            thr,
+            linestyle=":",
+            linewidth=0.9,
+            alpha=0.9,
+            label=thr_label,
+            color='k',
+        )
+
+    # --- Secondary y-axis in CFS ---
+    secax = ax.secondary_yaxis("right", functions=(f_m3d_to_cfs, f_cfs_to_m3d))
+    secax.set_ylabel("cfs")
+
+    # Labels/title
+    title = f"{name} Streamflow" if name else "Streamflow"
+    ax.set_title(title)
+    ax.set_xlabel("Date")
+    ax.set_ylabel("m³/d")
     ax.set_xlim(start, end)
-    ax.legend(loc='best')
-    ax.set_xlabel('Date')
-    ax.set_ylabel('m³/d')
-    fig.tight_layout()
+
+    # Gridlines (major + light minor)
+    ax.grid(True, which="major", linewidth=0.8, alpha=0.35)
+    ax.grid(True, which="minor", linewidth=0.6, alpha=0.18)
+
+    # Date formatting
+    ax.xaxis.set_major_locator(mdates.AutoDateLocator(minticks=5, maxticks=9))
+    ax.xaxis.set_major_formatter(mdates.ConciseDateFormatter(ax.xaxis.get_major_locator()))
+    ax.xaxis.set_minor_locator(mdates.MonthLocator())
+
+    # Cleaner spines
+    ax.spines["top"].set_visible(False)
+    secax.spines["top"].set_visible(False)
+
+    # Legend styling
+    ax.legend(loc="best", frameon=False, ncol=1, handlelength=2.2)
+
+    #fig.tight_layout()
+    return fig, ax
 
 #----------------------------------------------------------------------------------------------------------------------#
 
@@ -652,6 +758,7 @@ fj_daily_sd['sd_log10'] = StreamflowUncertainty.delta_method_log_sd(fj_daily_sd[
 # Plots
 stat_plots(fj_daily_sd)
 uncert_hydrograph(fj_daily_sd, start='10/01/2020', end='10/01/2025', name='Fort Jones')
+plt.savefig(plt_dir/'fort_jones_error_model.png', dpi=300)
 
 # Calculate weights by regime
 fj_daily_sd = weights_regime_equalized(fj_daily_sd)
@@ -716,6 +823,7 @@ sck_daily_sd, sck_floor = apply_sd_floor_by_regime(sck_daily_sd)
 # Plots
 stat_plots(sck_daily_sd)
 uncert_hydrograph(sck_daily_sd, start='10/01/2016', end='10/01/2018', name='Shackleford')
+plt.savefig(plt_dir/'shackleford_error_model.png', dpi=300)
 
 # Calculate weights by regime
 sck_daily_sd = weights_regime_equalized(sck_daily_sd)
@@ -763,6 +871,7 @@ as_daily_sd, as_floor = apply_sd_floor_by_regime(as_daily_sd)
 # Plots
 stat_plots(as_daily_sd)
 uncert_hydrograph(as_daily_sd, name='Above Serpa Lane')
+plt.savefig(plt_dir/'above_serpa_error_model.png', dpi=300)
 
 # Calculate weights by regime
 as_daily_sd = weights_regime_equalized(as_daily_sd)
@@ -810,6 +919,7 @@ by_daily_sd, by_floor = apply_sd_floor_by_regime(by_daily_sd)
 # Plots
 stat_plots(by_daily_sd)
 uncert_hydrograph(by_daily_sd, name="Below Young's Dam")
+plt.savefig(plt_dir/'below_youngs_dam_error_model.png', dpi=300)
 
 # Calculate weights by regime
 by_daily_sd = weights_regime_equalized(by_daily_sd)
