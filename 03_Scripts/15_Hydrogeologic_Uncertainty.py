@@ -29,7 +29,7 @@ sns.set_theme(style="whitegrid")
 
 # Plot settings
 plt.rcParams.update({
-    "font.family": "DM Serif Text",
+    "font.family": "Bahnschrift",
     "font.size": 12,
     "axes.titlesize": 12,
     "axes.labelsize": 12,

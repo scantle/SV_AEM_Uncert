@@ -34,7 +34,7 @@ plt.ioff()  # faster
 
 # Plot settings
 plt.rcParams.update({
-    "font.family": "Merriweather",
+    "font.family": "Bahnschrift",
     "axes.grid": True,
     "grid.color": "0.85",
     "grid.linewidth": 0.6,
@@ -526,15 +526,15 @@ fig, ax = plt.subplots(figsize=(6, 6))
 
 obs_uw = np.concatenate(scat_obs_uw)
 sim_uw = np.concatenate(scat_sim_uw)
-ax.scatter(obs_uw, sim_uw, s=8, facecolors="none",
-           edgecolors="0.5", alpha=0.6, label="Zero-weight Observations")
+# ax.scatter(obs_uw, sim_uw, s=8, facecolors="none",
+#            edgecolors="0.5", alpha=0.6, label="Zero-weight Observations")
 
-ax.scatter(obs_all, sim_all, s=8, alpha=0.35, label='Weighted Observations')
+ax.scatter(obs_all, sim_all, s=8, alpha=0.35, label='Head Observations')
 
 # 1:1 line
 lo = np.nanmin([obs_all.min(), sim_all.min()])
 hi = np.nanmax([obs_all.max(), sim_all.max()])
-ax.plot([lo, hi], [lo, hi], "k-", lw=1.0, zorder=0)
+ax.plot([lo, hi], [lo, hi], "k-", lw=1.0, zorder=0, label='1:1 line')
 
 ax.set_aspect("equal", adjustable="box")
 ax.set_xlim(lo, hi)
@@ -552,7 +552,38 @@ ax.legend(
 
 plt.tight_layout()
 
-out = plt_dir / "heads_obs_vs_sim_scatter_base_wzeroweight.png"
+#out = plt_dir / "heads_obs_vs_sim_scatter_base_wzeroweight.png"
+out = plt_dir / "heads_obs_vs_sim_scatter_base.png"
 fig.savefig(out, dpi=300)
 plt.close(fig)
 print(f"Saved {out}  (n={len(obs_all)} points)")
+
+# ----------------------------------------------------------------------------------------------------------------------
+# Residual statistics summary (for manuscript reporting)
+# ----------------------------------------------------------------------------------------------------------------------
+
+res = sim_all - obs_all
+abs_res = np.abs(res)
+
+summary = {
+    "n": len(res),
+    "mean_error": np.mean(res),
+    "median_error": np.median(res),
+    "rmse": np.sqrt(np.mean(res**2)),
+    "mae": np.mean(abs_res),
+    "std_error": np.std(res),
+    "p05": np.percentile(res, 5),
+    "p25": np.percentile(res, 25),
+    "p50": np.percentile(res, 50),
+    "p75": np.percentile(res, 75),
+    "p95": np.percentile(res, 95),
+    "max_abs_error": np.max(abs_res)
+}
+
+print("\nResidual Summary (Simulated − Observed Head Elevation)")
+print("-----------------------------------------------------")
+for k, v in summary.items():
+    if k == "n":
+        print(f"{k:>15}: {v}")
+    else:
+        print(f"{k:>15}: {v: .3f}")

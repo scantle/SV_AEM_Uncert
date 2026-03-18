@@ -1,3 +1,5 @@
+import matplotlib
+matplotlib.use('TkAgg')
 import numpy as np
 import pandas as pd
 from pathlib import Path
@@ -14,7 +16,8 @@ from tqdm import tqdm
 # -------------------------------------------------------------------------------------------------------------------- #
 
 # MODFLOW settings
-model_dir = Path('C:/Projects/SVIHM/2025_R2P_PEST_Calib_iter3/SVIHM/MODFLOW/')
+#model_dir = Path('C:/Projects/SVIHM/2025_R2P_PEST_Calib_iter3/SVIHM/MODFLOW/')
+model_dir = Path('/Volumes/Macintosh HD/Users/leland/Documents/ModelRuns/2025_R2P_PEST_Calib_iter3/SVIHM/MODFLOW/')
 model_name = 'SVIHM'
 
 xoff = 499977
@@ -27,11 +30,12 @@ sns.set_theme(style="whitegrid")
 
 # Plot settings
 plt.rcParams.update({
-    "font.family": "DM Serif Text",
-    "font.size": 12,
-    "axes.titlesize": 12,
-    "axes.labelsize": 12,
+    "font.family": "Bahnschrift",
+    "font.size": 13,
+    "axes.titlesize": 14,
+    "axes.labelsize": 13,
     "figure.dpi": 300,
+    "axes.unicode_minus": False # for mac
 })
 
 # Output
@@ -63,19 +67,26 @@ def _nice_scale_length(max_len):
 
 # -------------------------------------------------------------------------------------------------------------------- #
 
-def add_north_arrow(ax, size=0.1):
+def add_north_arrow(ax, x=0.08, y=0.98, arrow_len=0.08):
     """
-    Add a simple north arrow to an axis (axes fraction coordinates).
+    Add a simple north arrow in axes-fraction coordinates.
     """
     ax.annotate(
-        'N',
-        xy=(0.05, 0.99),
-        xytext=(0.05, 0.9),
-        xycoords='axes fraction',
-        ha='center', va='center',
-        arrowprops=dict(arrowstyle='-|>', lw=1.5),
-        fontsize=8,
+        "N",
+        xy=(x, y),
+        xytext=(x, y - arrow_len),
+        xycoords="axes fraction",
+        textcoords="axes fraction",
+        ha="center",
+        va="bottom",
+        fontsize=10,
+        fontweight="bold",
+        arrowprops=dict(arrowstyle="-|>", lw=1.5, color="k"),
+        annotation_clip=False,
+        clip_on=False,
+        zorder=10,
     )
+
 
 # -------------------------------------------------------------------------------------------------------------------- #
 

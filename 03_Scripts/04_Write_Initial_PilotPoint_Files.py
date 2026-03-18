@@ -559,9 +559,9 @@ _north_arrow(axes[0], xy=(0.16, 0.16))
 
 # Legend: build explicit handles to avoid dupes and control order
 handles = [
-    Line2D([], [], marker=M_MULT,  color=C_MULT,  linestyle="None", markersize=5, label="Kriging variance multiplier"),
+    Line2D([], [], marker=M_MULT,  color=C_MULT,  linestyle="None", markersize=5, label="Kriging uncertainty multiplier"),
     Line2D([], [], marker=M_SCALE, color=C_SCALE, markeredgecolor="black", markeredgewidth=0.5,
-           linestyle="None", markersize=6, label="Texture–resistivity scale"),
+           linestyle="None", markersize=6, label="ER-texture scale"),
 ]
 if kvme_pp_flag:
     handles += [

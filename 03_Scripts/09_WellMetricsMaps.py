@@ -26,7 +26,8 @@ plt_dir = Path('05_Plots/WellMetricsMaps/')
 plt_dir.mkdir(parents=True, exist_ok=True)
 svihm_dir = Path('../SVIHM/')  # External to project, local SVIHM Git repo
 svihm_ref_dir = svihm_dir / 'SVIHM_Input_Files/reference_data_for_plots/'
-model_dir = Path('C:/Projects/SVIHM/2025_R2P_PEST_Calib_iter3/SVIHM/MODFLOW/')
+#model_dir = Path('C:/Projects/SVIHM/2025_R2P_PEST_Calib_iter3/SVIHM/MODFLOW/')
+model_dir = Path('/Volumes/Macintosh HD/Users/leland/Documents/ModelRuns/2025_R2P_PEST_Calib_iter3/SVIHM/MODFLOW')
 tex_file_dir = model_dir / '../preproc/'
 hob_cache = data_dir / 'hobs_df_cached.pkl'
 head_obs_file = data_dir / 'head_obs_master.csv'
@@ -53,11 +54,12 @@ sns.set_theme(style="whitegrid")
 
 # Plot settings
 plt.rcParams.update({
-    "font.family": "DM Serif Text",
+    "font.family": "Bahnschrift",  # DM Serif Text
     "font.size": 10,
     "axes.titlesize": 12,
     "axes.labelsize": 12,
     "figure.dpi": 300,
+    "axes.unicode_minus": False # for mac
 })
 
 # -------------------------------------------------------------------------------------------------------------------- #
