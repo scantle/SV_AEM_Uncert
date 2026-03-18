@@ -198,3 +198,5 @@ cython_debug/
 *.fac
 05_Plots/*
 *.chk
+
+.DS_Store
