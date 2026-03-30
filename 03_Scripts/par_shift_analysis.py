@@ -921,9 +921,9 @@ plot_jobs = [
         "df": kv_agreement,
         "metric_col": "signed_agreement",
         "out_file": plt_dir / "kv_signed_agreement_map.png",
-        "title": "Kriging Uncertainty Multiplier Signed Agreement",
-        "cbar_label": "Signed Agreement",
-        "markersize": 15,
+        "title": "Kriging Uncertainty Multiplier Directional Agreement",
+        "cbar_label": "Directional Agreement",
+        "markersize": 17,
     },
     {
         "df": kv_agreement,
@@ -931,7 +931,7 @@ plot_jobs = [
         "out_file": plt_dir / "kv_mean_shift_from_base_map.png",
         "title": "Kriging Uncertainty Multiplier Mean Posterior Shift",
         "cbar_label": "Mean Posterior Shift from Base",
-        "markersize": 15,
+        "markersize": 17,
     },
 
     # scale overall shift
@@ -939,8 +939,8 @@ plot_jobs = [
         "df": scale_agreement,
         "metric_col": "signed_agreement_meanlog",
         "out_file": plt_dir / "scale_signed_agreement_meanlog_map.png",
-        "title": "Scale Signed Agreement (Mean Log-Shift)",
-        "cbar_label": "Signed Agreement of Mean Log-Shift",
+        "title": "Scale Directional Agreement (Mean Log-Shift)",
+        "cbar_label": "Directional Agreement of Mean Log-Shift",
         "markersize": 55,
     },
     {
@@ -957,8 +957,8 @@ plot_jobs = [
         "df": scale_agreement,
         "metric_col": "signed_agreement_rankslope",
         "out_file": plt_dir / "scale_signed_agreement_rankslope_map.png",
-        "title": "ER-texture Transform Scale Distribution Signed Agreement (Rank-Slope)",
-        "cbar_label": "Signed Agreement of Rank-Slope",
+        "title": "ER-texture Transform Scale Distribution Directional Agreement",
+        "cbar_label": "Directional Agreement of Rank-Slope",
         "markersize": 55,
     },
     {
@@ -987,7 +987,7 @@ for job in plot_jobs:
         layer_col="layer_num",
         x_col="x",
         y_col="y",
-        cmap_name="RdBu_r",
+        cmap_name="PuOr",
         qlim=0.99,
         marker_size=job['markersize'],
     )
