@@ -10,7 +10,7 @@ from sklearn.metrics import r2_score
 
 data_dir = Path("01_Data/")
 f_dir    = Path("06_Outputs/06_wtfx/")
-obs_file = f_dir / "svihm_ies.3.obs.csv"   # <-- set this
+obs_file = f_dir / "svihm_ies.3.obs.csv"
 str_obs_file = data_dir / "streamflow_obs_std.csv"
 head_obs_file = data_dir / 'head_obs_master.csv'
 
