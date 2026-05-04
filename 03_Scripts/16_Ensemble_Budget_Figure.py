@@ -22,7 +22,7 @@ out_dir.mkdir(parents=True, exist_ok=True)
 mf_nam = 'SVIHM'
 origin_date = pd.to_datetime('1990-09-30')
 TAF_FACTOR = 1.0 / (1_000 * 1233.48183754752)
-convert_to_TAF = True
+convert_to_TAF = False
 
 # Choose uncertainty style:
 #   "std"        -> symmetric +/- 1 std
@@ -127,6 +127,8 @@ def load_modflow_annual_budget(file_path: Path, start_date: pd.Timestamp) -> pd.
     # Convert to TAF
     if convert_to_TAF:
         mfdf = mfdf * TAF_FACTOR
+    else:
+        mfdf = mfdf / 1e6
 
     return mfdf
 
@@ -299,7 +301,7 @@ def plot_component_bars(
     if convert_to_TAF:
         ylabel = "Annual Volume (TAF)"
     else:
-        ylabel = 'Annual Volume ($m^3$)'
+        ylabel = 'Annual Volume ($Mm^3$)'
     if UNCERTAINTY_STYLE == "std":
         subtitle = "bars = ensemble mean, error bars = ±1 SD"
     else:
