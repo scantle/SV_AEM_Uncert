@@ -4,6 +4,7 @@ matplotlib.use("TkAgg")
 import numpy as np
 import pandas as pd
 from pathlib import Path
+import project_paths as paths
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 import seaborn as sns
@@ -14,19 +15,19 @@ from flopy.plot import PlotMapView
 # Setup
 # ----------------------------------------------------------------------------------------------------------------------
 
-data_dir = Path("01_Data")
-f_dir = Path("06_Outputs/06_wtfx/")
-out_dir = Path("06_Outputs/processed_pp_tables")
+data_dir = paths.DATA_DIR
+f_dir = paths.run_dir('06_wtfx')
+out_dir = paths.OUTPUT_DIR / 'processed_pp_tables'
 out_dir.mkdir(parents=True, exist_ok=True)
-plt_dir = Path("05_Plots/pp_shifts")
+plt_dir = paths.PLOT_DIR / 'pp_shifts'
 plt_dir.mkdir(parents=True, exist_ok=True)
 
 par_init_file = f_dir / "svihm_ies.0.par.csv"
 par_final_file = f_dir / "svihm_ies.3.par.csv"
 
 # PP location files
-kv_pp_file = data_dir / "pp_init_csv" / "init_kv_mult_pp_kv_mult.csv"
-scale_pp_file = data_dir / "pp_init_csv" / "init_scale_pp_all_textures.csv"
+kv_pp_file = paths.PP_INIT_DIR / "init_kv_mult_pp_kv_mult.csv"
+scale_pp_file = paths.PP_INIT_DIR / "init_scale_pp_all_textures.csv"
 
 # Texture prior distribution file (for base scale constants)
 tex_dist_file = data_dir / "lognorm_dist_clustered.par"
@@ -50,7 +51,7 @@ texture_weights = {
 }
 
 # MODFLOW settings
-model_dir = Path('/Volumes/Macintosh HD/Users/leland/Documents/ModelRuns/2025_R2P_PEST_Calib_iter3/SVIHM/MODFLOW/')
+model_dir = paths.RUNS_DIR / '2025_R2P_PEST_Calib_iter3' / 'SVIHM' / 'MODFLOW'
 model_name = 'SVIHM'
 xoff = 499977
 yoff = 4571330

@@ -6,6 +6,7 @@ from shapely.ops import unary_union
 from shapely.affinity import translate
 import random
 from pathlib import Path
+import project_paths as paths
 import flopy
 
 #----------------------------------------------------------------------------------------------------------------------#
@@ -13,14 +14,14 @@ import flopy
 #----------------------------------------------------------------------------------------------------------------------#
 
 # Directories
-data_dir = Path('./04_InputFiles/RES2PAR')
-shp_dir = Path('01_Data/GIS/')
+data_dir = paths.DERIVED_DIR
+shp_dir = paths.DERIVED_GIS_DIR
 
-out_dir = data_dir / 'PPlocs' # for csvs, shapefiles go in shp_dir
+out_dir = paths.PP_LOC_DIR # for csvs, shapefiles go in shp_dir
 out_dir.mkdir(exist_ok=True)
 
 # MODFLOW Model
-mf_dir = Path('./02_Models/SVIHM_MF_working/MODFLOW/')
+mf_dir = paths.MF_DIR
 model_name = 'svihm'
 xoff = 499977
 yoff = 4571330

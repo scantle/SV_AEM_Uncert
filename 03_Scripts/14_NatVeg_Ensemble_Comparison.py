@@ -2,6 +2,7 @@ import matplotlib
 matplotlib.use('TkAgg')
 import os
 from pathlib import Path
+import project_paths as paths
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 import seaborn as sns
@@ -14,8 +15,8 @@ from sklearn.metrics import r2_score
 # Setup
 #----------------------------------------------------------------------------------------------------------------------#
 
-data_dir = Path('01_Data/')
-f_dir = Path('06_Outputs/06_wtfx/')
+data_dir = paths.DERIVED_DIR
+f_dir = paths.run_dir('06_wtfx')
 
 #par_file   = f_dir / "svihm_ies.2.par.csv"
 obs_file   = f_dir / "svihm_ies.3.obs.csv"
@@ -25,7 +26,7 @@ natveg_low_file = f_dir / 'svihm_natveg_low.csv'
 # Extract iteration number...
 iter = obs_file.name.split('.')[1]
 
-plt_dir = Path('05_Plots/') / f'{f_dir.name}_iter{iter}' / 'natveg'
+plt_dir = paths.PLOT_DIR / f'{f_dir.name}_iter{iter}' / 'natveg'
 hds_plot_dir = plt_dir / 'hds_plots'
 hds_plot_dir.mkdir(parents=True, exist_ok=True)
 

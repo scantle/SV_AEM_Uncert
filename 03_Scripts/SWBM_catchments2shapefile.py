@@ -4,6 +4,7 @@ import pandas as pd
 import geopandas as gpd
 import warnings
 from pathlib import Path
+import project_paths as paths
 from shapely import wkb
 
 # -------------------------------------------------------------------------------------------------------------------- #
@@ -11,9 +12,9 @@ from shapely import wkb
 # -------------------------------------------------------------------------------------------------------------------- #
 
 # Directories
-swbm_dir = Path('02_Models/SVIHM_MF_working/SWBM/')
-data_dir = Path('01_Data')
-shp_dir = data_dir / 'GIS'
+swbm_dir = paths.SWBM_DIR
+data_dir = paths.DATA_DIR
+shp_dir = paths.GIS_DIR
 
 # Shapefiles
 sv_model_shp_file = shp_dir / 'grid_properties_rep.shp'

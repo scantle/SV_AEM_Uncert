@@ -5,16 +5,17 @@ import numpy as np
 import pandas as pd
 import geopandas as gpd
 from pathlib import Path
+import project_paths as paths
 
 #----------------------------------------------------------------------------------------------------------------------#
 # Settings
 #----------------------------------------------------------------------------------------------------------------------#
 
 # Directories
-out_dir = Path('./06_Outputs/')
-data_dir = Path ('./01_Data/')
-shp_dir = data_dir / 'GIS/'
-plt_dir = Path('./05_Plots/')
+out_dir = paths.OUTPUT_DIR
+data_dir = paths.DATA_DIR
+shp_dir = paths.GIS_DIR
+plt_dir = paths.PLOT_DIR
 
 # Shapefiles
 sv_model_domain_file = shp_dir / 'Model_Domain_20180222.shp'

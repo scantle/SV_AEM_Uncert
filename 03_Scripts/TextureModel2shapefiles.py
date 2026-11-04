@@ -3,16 +3,17 @@ matplotlib.use('TkAgg')
 import pandas as pd
 import geopandas as gpd
 from pathlib import Path
+import project_paths as paths
 
 # -------------------------------------------------------------------------------------------------------------------- #
 # Settings
 # -------------------------------------------------------------------------------------------------------------------- #
 
 # Directories
-data_dir = Path('01_Data/')
-shp_dir = data_dir / 'GIS'
-out_dir = Path('06_Outputs')
-tex_file_dir = Path('02_Models/SVIHM_MF_working/preproc')
+data_dir = paths.DATA_DIR
+shp_dir = paths.GIS_DIR
+out_dir = paths.OUTPUT_DIR
+tex_file_dir = paths.PREPROC_DIR
 
 # Texture files
 tex_files = {
@@ -27,8 +28,8 @@ tex_files = {
 sv_model_shp_file = shp_dir / 'grid_properties_rep.shp'
 
 # Outputs
-grid_layer1_shapefile   = shp_dir / "texture_model_TEST_aemvar_layer1.shp"
-grid_layer2_shapefile   = shp_dir / "texture_model_TEST_aemvar_layer2.shp"
+grid_layer1_shapefile   = paths.DERIVED_GIS_DIR / "texture_model_TEST_aemvar_layer1.shp"
+grid_layer2_shapefile   = paths.DERIVED_GIS_DIR / "texture_model_TEST_aemvar_layer2.shp"
 
 # -------------------------------------------------------------------------------------------------------------------- #
 # Classes/Functions

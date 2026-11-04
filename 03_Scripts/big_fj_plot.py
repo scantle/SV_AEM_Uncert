@@ -2,6 +2,7 @@ import matplotlib
 matplotlib.use('TkAgg')
 import os
 from pathlib import Path
+import project_paths as paths
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 import seaborn as sns
@@ -13,8 +14,8 @@ from tqdm import tqdm
 # Setup
 #----------------------------------------------------------------------------------------------------------------------#
 
-data_dir = Path('01_Data/')
-f_dir = Path('06_Outputs/06_wtfx/')
+data_dir = paths.DERIVED_DIR
+f_dir = paths.run_dir('06_wtfx')
 
 #par_file   = f_dir / "svihm_ies.2.par.csv"
 obs_file   = f_dir / "svihm_ies.3.obs.csv"
@@ -22,7 +23,7 @@ obs_file   = f_dir / "svihm_ies.3.obs.csv"
 # Extract iteration number...
 iter = obs_file.name.split('.')[1]
 
-plt_dir = Path('05_Plots/') / f'{f_dir.name}_iter{iter}'
+plt_dir = paths.PLOT_DIR / f'{f_dir.name}_iter{iter}'
 
 str_obs_file = data_dir / 'streamflow_obs_std.csv'
 

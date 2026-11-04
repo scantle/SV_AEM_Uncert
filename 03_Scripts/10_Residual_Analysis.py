@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
 from pathlib import Path
+import project_paths as paths
 
 # import os
 # os.chdir('../')
@@ -13,12 +14,12 @@ from pathlib import Path
 # -------------------------------------------------------------------------------------------------------------------- #
 
 # Directories
-data_dir = Path('01_Data/')
-shp_dir = data_dir / 'GIS'
-model_dir = Path('//BEHEMOTH/Users/lelan/Documents/ModelRuns/SVIHM/2025_r2p_ies/testing/pst04_iter01_goodpars_newweights/')
-prev_cal_dir = Path('C:/Users/lelan/Documents/CodeProjects/PhD_SV_AEM_Uncert/06_Outputs/05_novolt_drnostreams')
+data_dir = paths.DATA_DIR
+shp_dir = paths.GIS_DIR
+model_dir = paths.RUNS_DIR / '2025_r2p_ies' / 'testing' / 'pst04_iter01_goodpars_newweights'
+prev_cal_dir = paths.run_dir('05_novolt_drnostreams')
 
-out_dir = Path('06_Outputs')
+out_dir = paths.OUTPUT_DIR
 
 # -------------------------------------------------------------------------------------------------------------------- #
 # Classes/Functions
@@ -98,4 +99,4 @@ w_df['new_phi'] = (w_df["new_weight"] ** 2) * (w_df["res"] ** 2)
 w_df.groupby('obgnme').new_phi.agg('sum')
 
 # Write out stream weight multipliers
-w_df['wmult'].to_csv(data_dir / "str_wmults.csv")
+w_df['wmult'].to_csv(paths.DERIVED_DIR / "str_wmults.csv")

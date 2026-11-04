@@ -9,6 +9,7 @@ import numpy as np
 import flopy
 import geopandas as gpd
 from pathlib import Path
+import project_paths as paths
 from hydroeval import evaluator, nse, kge, rmse, pbias
 from tqdm import tqdm
 
@@ -20,14 +21,14 @@ from tqdm import tqdm
 # -------------------------------------------------------------------------------------------------------------------- #
 
 # Directories
-data_dir = Path('01_Data/')
-shp_dir = data_dir / 'GIS'
-plt_dir = Path('05_Plots/WellMetricsMaps/')
+data_dir = paths.DERIVED_DIR
+shp_dir = paths.GIS_DIR
+plt_dir = paths.PLOT_DIR / 'WellMetricsMaps'
 plt_dir.mkdir(parents=True, exist_ok=True)
-svihm_dir = Path('../SVIHM/')  # External to project, local SVIHM Git repo
+svihm_dir = paths.SVIHM_REPO  # External to project, local SVIHM Git repo
 svihm_ref_dir = svihm_dir / 'SVIHM_Input_Files/reference_data_for_plots/'
 #model_dir = Path('C:/Projects/SVIHM/2025_R2P_PEST_Calib_iter3/SVIHM/MODFLOW/')
-model_dir = Path('/Volumes/Macintosh HD/Users/leland/Documents/ModelRuns/2025_R2P_PEST_Calib_iter3/SVIHM/MODFLOW')
+model_dir = paths.RUNS_DIR / '2025_R2P_PEST_Calib_iter3' / 'SVIHM' / 'MODFLOW'
 tex_file_dir = model_dir / '../preproc/'
 hob_cache = data_dir / 'hobs_df_cached.pkl'
 head_obs_file = data_dir / 'head_obs_master.csv'
@@ -383,7 +384,7 @@ gwf = flopy.modflow.Modflow.load('SVIHM.nam', load_only=['dis','bas6','upw'], ve
 gwf.modelgrid.set_coord_info(xoff=xoff, yoff=yoff)
 
 # Read in hob key for XY locations...
-hob_locs = pd.read_csv(svihm_ref_dir / '_hob_key.csv')
+hob_locs = pd.read_csv(paths.private_file(svihm_ref_dir / '_hob_key.csv'))
 
 # Also reads in simulated values
 sim_hobs = pd.read_csv(model_dir / 'HobData_SVIHM.dat', sep='\\s+', skiprows=1, names=['simval', 'obsval', 'obsnme'])

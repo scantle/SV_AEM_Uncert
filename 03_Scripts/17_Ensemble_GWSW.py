@@ -5,6 +5,7 @@ import pandas as pd
 import geopandas as gpd
 import flopy
 from pathlib import Path
+import project_paths as paths
 from tqdm import tqdm
 
 # -------------------------------------------------------------------------------------------------------------------- #
@@ -14,12 +15,12 @@ from tqdm import tqdm
 origin_date = pd.to_datetime('1990-09-30')
 
 # Parent directory containing ensemble LST outputs
-ens_dir = Path('./06_Outputs/06_wtfx/BUD_SFRBUD_ensemble/')
+ens_dir = paths.run_dir('06_wtfx') / 'BUD_SFRBUD_ensemble'
 
 # Reach shapefile
-sfr_shpfile = Path('./01_Data/GIS/sfr_properties.shp')
+sfr_shpfile = paths.GIS_DIR / 'sfr_properties.shp'
 
-out_dir = Path('./05_Plots/modflow_sfr_budget_uncertainty')
+out_dir = paths.PLOT_DIR / 'modflow_sfr_budget_uncertainty'
 out_dir.mkdir(parents=True, exist_ok=True)
 
 # -------------------------------------------------------------------------------------------------------------------- #

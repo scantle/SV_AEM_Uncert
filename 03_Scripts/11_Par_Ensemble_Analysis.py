@@ -2,6 +2,7 @@ import matplotlib
 matplotlib.use('TkAgg')
 from matplotlib.font_manager import FontProperties
 from pathlib import Path
+import project_paths as paths
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 import seaborn as sns
@@ -13,8 +14,8 @@ from tqdm import tqdm
 # Setup
 #----------------------------------------------------------------------------------------------------------------------#
 
-data_dir = Path('01_Data/')
-f_dir = Path('06_Outputs/06_wtfx/')
+data_dir = paths.DATA_DIR
+f_dir = paths.run_dir('06_wtfx')
 
 par_init_file = f_dir / "svihm_ies.0.par.csv"
 par_file   = f_dir / "svihm_ies.3.par.csv"
@@ -27,7 +28,7 @@ phi_meas_file   = f_dir / 'svihm_ies.phi.meas.csv'
 # Extract iteration number...
 iter = obs_file.name.split('.')[1]
 
-plt_dir = Path('05_Plots/') / f'{f_dir.name}_iter{iter}' / 'par_analysis'
+plt_dir = paths.PLOT_DIR / f'{f_dir.name}_iter{iter}' / 'par_analysis'
 plt_dir.mkdir(parents=True, exist_ok=True)
 
 # Fonts

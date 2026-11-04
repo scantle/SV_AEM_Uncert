@@ -7,16 +7,17 @@ import seaborn as sns
 import numpy as np
 import pandas as pd
 from pathlib import Path
+import project_paths as paths
 
 #----------------------------------------------------------------------------------------------------------------------#
 # Settings
 #----------------------------------------------------------------------------------------------------------------------#
 
-data_dir = Path('01_Data/')
-out_dir  = data_dir
-pest_dir = Path("04_PEST_setup")   # TPL, INS
-mf_dir = Path("02_Models/SVIHM_MF_working/MODFLOW/")
-plt_dir = Path("05_Plots/strflw_error/")
+data_dir = paths.DATA_DIR
+out_dir  = paths.DERIVED_DIR
+pest_dir = paths.PEST_DIR   # TPL, INS
+mf_dir = paths.MF_DIR
+plt_dir = paths.PLOT_DIR / 'strflw_error'
 plt_dir.mkdir(parents=True, exist_ok=True)
 
 streams = ['FJ','SCK','AS','BY']
@@ -936,7 +937,13 @@ fj_obs.loc[fj_obs.regime=='low', 'weight'] *= 2.5
 fj_obs.loc[fj_obs.regime=='inbank', 'weight'] *= 1
 
 # Weights from previous run weight analysis
-wdf = pd.read_csv(data_dir / "str_wmults.csv")
+wmult_file = paths.DERIVED_DIR / "str_wmults.csv"
+if wmult_file.exists():
+    wdf = pd.read_csv(wmult_file)
+    print(f"Applying weight multipliers from {wmult_file.name}")
+else:
+    wdf = pd.DataFrame(columns=["obsnme", "wmult"])
+    print("No weight multiplier file found, using weights as-is")
 
 # Apply weight multipliers to per-stream obs tables (case-insensitive on obsnme)
 fj_obs  = apply_weight_multipliers(fj_obs,  wdf)

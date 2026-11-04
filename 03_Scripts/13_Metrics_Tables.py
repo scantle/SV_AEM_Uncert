@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 from pathlib import Path
+import project_paths as paths
 from hydroeval import evaluator, nse, kgeprime, rmse, pbias
 from sklearn.metrics import r2_score
 
@@ -8,13 +9,13 @@ from sklearn.metrics import r2_score
 # Settings
 # ----------------------------------------------------------------------------------------------------------------------
 
-data_dir = Path("01_Data/")
-f_dir    = Path("06_Outputs/06_wtfx/")
+data_dir = paths.DERIVED_DIR
+f_dir    = paths.run_dir('06_wtfx')
 obs_file = f_dir / "svihm_ies.3.obs.csv"
 str_obs_file = data_dir / "streamflow_obs_std.csv"
 head_obs_file = data_dir / 'head_obs_master.csv'
 
-out_dir  = Path("05_Outputs/")
+out_dir  = paths.OUTPUT_DIR
 out_dir.mkdir(parents=True, exist_ok=True)
 
 # Low-flow cutoffs in linear space

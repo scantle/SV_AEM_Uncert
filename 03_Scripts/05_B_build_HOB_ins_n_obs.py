@@ -6,6 +6,7 @@ import pandas as pd
 import flopy
 from tqdm import tqdm
 from pathlib import Path
+import project_paths as paths
 from typing import List, Tuple
 
 #----------------------------------------------------------------------------------------------------------------------#
@@ -19,10 +20,10 @@ yoff = 4571330
 origin_date = pd.to_datetime('1990-9-30')
 
 # Directories
-pest_dir = Path("04_PEST_setup")   # TPL, INS
-data_dir  = Path('01_Data')
-model_dir = Path('02_Models/SVIHM_MF_working/MODFLOW')
-plot_dir  = Path('05_Plots/Weights')
+pest_dir = paths.PEST_DIR   # TPL, INS
+data_dir  = paths.DERIVED_DIR
+model_dir = paths.MF_DIR
+plot_dir  = paths.PLOT_DIR / 'Weights'
 plot_dir.mkdir(exist_ok=True)
 
 # Specific files

@@ -1,0 +1,6 @@
+{
+  "archive_dir": "C:/path/to/SVIHM_archive/2025_AEM_calib",
+  "runs_dir": "C:/path/to/ModelRuns/SVIHM",
+  "pestpp_bin_dir": "C:/path/to/pestpp-5.2.16-win/bin",
+  "svihm_repo": "C:/path/to/Repos/SVIHM"
+}

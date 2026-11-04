@@ -7,6 +7,7 @@ from tqdm import tqdm
 import gstools as gs
 from gstools.covmodel import SumModel
 from pathlib import Path
+import project_paths as paths
 from math import radians, pi
 
 #----------------------------------------------------------------------------------------------------------------------#
@@ -14,11 +15,11 @@ from math import radians, pi
 #----------------------------------------------------------------------------------------------------------------------#
 
 # Input Files
-in_dir = Path('./01_Data/')
-plt_dir = Path('./05_Plots')
+in_dir = paths.DERIVED_DIR
+plt_dir = paths.PLOT_DIR
 
 # MODFLOW Model
-mf_dir = Path('./02_Models/SVIHM_MF_working/MODFLOW/')
+mf_dir = paths.MF_DIR
 model_name = 'svihm'
 xoff = 499977
 yoff = 4571330

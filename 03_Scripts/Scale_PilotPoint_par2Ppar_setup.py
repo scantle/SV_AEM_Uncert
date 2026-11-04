@@ -5,14 +5,15 @@ No longer being used
 import pandas as pd
 import numpy as np
 from pathlib import Path
+import project_paths as paths
 
 #----------------------------------------------------------------------------------------------------------------------#
 # Settings
 #----------------------------------------------------------------------------------------------------------------------#
 
-tpl_dir = Path('04_InputFiles/PEST')
-data_dir  = Path('./01_Data/')
-out_dir = Path('./06_Outputs')
+tpl_dir = paths.PEST_DIR
+data_dir  = paths.DATA_DIR
+out_dir = paths.OUTPUT_DIR
 texs = ['Fine', 'Mixed_Fine', 'Sand', 'Mixed_Coarse', 'Very_Coarse']
 tex_dist_file = data_dir / 'lognorm_dist_clustered.par'
 pp_file_formula = 'scale_pp_{tex}_L{lay}.dat.tpl'

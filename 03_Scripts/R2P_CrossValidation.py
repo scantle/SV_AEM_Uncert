@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from pathlib import Path
+import project_paths as paths
 from datetime import datetime
 import copy
 import shutil
@@ -17,12 +18,12 @@ import t2py
 # -------------------------------------------------------------------------------------------------------------------- #
 
 # Files
-mod_dir = Path('./02_Models/r2p_cv/MODFLOW/')
-t2p_dir = Path('./02_Models/r2p_cv/preproc/')
+mod_dir = paths.MODELS_DIR / 'r2p_cv' / 'MODFLOW'
+t2p_dir = paths.MODELS_DIR / 'r2p_cv' / 'preproc'
 t2p_inf = t2p_dir / 'svihm.t2p'
 t2p_log = t2p_dir / 'res_log.csv'
-t2p_path = Path('./02_Models/Bin/Texture2Par.exe')
-run_dir = Path('./02_Models/CV_runs/')
+t2p_path = paths.BIN_DIR / 'Texture2Par.exe'
+run_dir = paths.RUNS_DIR / 'r2p_cv_runs'
 run_dir.mkdir(parents=True, exist_ok=True)
 
 t2p_files = ['interp_tex_dists.csv', 'kv_mult.csv','SVIHM_TEMPLATE.upw']

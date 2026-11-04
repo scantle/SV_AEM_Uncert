@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 from pathlib import Path
+import project_paths as paths
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 import mapclassify
@@ -14,10 +15,10 @@ from tqdm import tqdm
 # -------------------------------------------------------------------------------------------------------------------- #
 
 # MODFLOW settings
-model_dir = Path('C:/Projects/SVIHM/2025_R2P_PEST_Calib_iter3/SVIHM/MODFLOW/')
+model_dir = paths.RUNS_DIR / '2025_R2P_PEST_Calib_iter3' / 'SVIHM' / 'MODFLOW'
 model_name = 'SVIHM'
 
-ens_dir = Path('06_Outputs/06_wtfx/UPW_SFR_ensemble/')
+ens_dir = paths.run_dir('06_wtfx') / 'UPW_SFR_ensemble'
 
 xoff = 499977
 yoff = 4571330
@@ -37,7 +38,7 @@ plt.rcParams.update({
 })
 
 # Output
-plt_dir = Path('05_Plots/MF_props_uncert/')
+plt_dir = paths.PLOT_DIR / 'MF_props_uncert'
 plt_dir.mkdir(parents=True, exist_ok=True)
 
 # -------------------------------------------------------------------------------------------------------------------- #

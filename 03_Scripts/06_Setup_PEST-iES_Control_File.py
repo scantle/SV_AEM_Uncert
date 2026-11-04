@@ -5,6 +5,7 @@ import pyemu
 import flopy
 from tqdm import tqdm
 from pathlib import Path
+import project_paths as paths
 import shutil
 import glob
 
@@ -23,15 +24,14 @@ kvme_pp_flag = False
 
 # Directories
 orig_dir  = os.getcwd()
-pest_dir  = Path("04_PEST_setup")   # TPL, INS
-work_dir  = Path("C:/Projects/SVIHM/2025_R2P_PEST_Calib")  # build folder
-data_dir  = Path('01_Data')
-exe_dir   = Path('02_Models/Bin')
-scpt_dir  = Path('03_Scripts/')
-model_dir = Path('02_Models/SVIHM_MF_working')
+pest_dir  = paths.PEST_DIR   # TPL, INS
+work_dir  = paths.RUNS_DIR / '2025_R2P_PEST_Calib'  # build folder
+data_dir  = paths.DATA_DIR
+exe_dir   = paths.BIN_DIR
+scpt_dir  = paths.SCRIPT_DIR
+model_dir = paths.MODEL_DIR
 mf_dir    = model_dir / 'MODFLOW'
-pest_exe_dir = Path('C:/Users/lelan/Documents/Models/pest17')
-pestpp_exe = Path('C:/Users/lelan/Documents/Models/pestpp-5.2.16-iwin/bin/pestpp-ies.exe')
+pestpp_exe = paths.pestpp_exe('pestpp-ies')
 
 # After we have some runs...
 
@@ -40,7 +40,7 @@ pestpp_exe = Path('C:/Users/lelan/Documents/Models/pestpp-5.2.16-iwin/bin/pestpp
 # base_par_update = Path('06_Outputs/06_wtfx/svihm_ies.3.base.par')
 base_par_update = None
 
-ensb_par_update = Path('06_Outputs/06_wtfx/svihm_ies.3.par.csv')
+ensb_par_update = paths.run_dir('06_wtfx') / 'svihm_ies.3.par.csv'
 ensb_num = 0
 
 # Out
@@ -243,18 +243,18 @@ end_date = origin_date + pd.DateOffset(months=gwf.nper)
 #----------------------------------------------------------------------------------------------------------------------#
 
 # Read in streamflow observations written by 05_A_Streamflow_Error_Models.py
-sfr_obs = pd.read_csv(data_dir / 'streamflow_obs_std.csv', index_col='obsnme')
+sfr_obs = pd.read_csv(paths.DERIVED_DIR / 'streamflow_obs_std.csv', index_col='obsnme')
 sfr_obs = sfr_obs.rename({'obsgnme': 'obgnme'}, axis=1)  # I hate these abbreviations
 
 # Read in head observations written by 05_B_build_HOB_ins_n_obs.py
-hob_obs = pd.read_csv(data_dir / 'head_obs_master.csv', index_col='obsnme')
+hob_obs = pd.read_csv(paths.DERIVED_DIR / 'head_obs_master.csv', index_col='obsnme')
 hob_obs = hob_obs.rename({'obval': 'obsval', 'group': 'obgnme', 'stdev': 'standard_deviation'}, axis=1)
 
 #----------------------------------------------------------------------------------------------------------------------#
 # Parameters
 #----------------------------------------------------------------------------------------------------------------------#
 
-pp_init_files = [item for item in sorted((data_dir / 'pp_init_csv').glob("**/*.csv"))]
+pp_init_files = [item for item in sorted(paths.PP_INIT_DIR.glob("**/*.csv"))]
 pp_init_dfs = []
 for pp_init in pp_init_files:
     df = pd.read_csv(pp_init)
@@ -302,7 +302,7 @@ if fmdir.exists():
 shutil.copytree(model_dir, fmdir)
 
 # Head obs file,
-shutil.copy2(data_dir / 'head_obs_master.csv', fmdir / 'MODFLOW')
+shutil.copy2(paths.DERIVED_DIR / 'head_obs_master.csv', fmdir / 'MODFLOW')
 
 # Latest EXEs
 shutil.copytree(exe_dir, fmdir / 'Bin')
@@ -313,7 +313,8 @@ for f in fm_scripts:
     shutil.copy2(scpt_dir/ f, fmdir / 'Bin')
 
 # Remove and remake target directory, copy in files
-shutil.rmtree(work_dir)
+if work_dir.exists():
+    shutil.rmtree(work_dir)
 shutil.copytree(pest_dir, work_dir)
 shutil.copy2(pestpp_exe, work_dir)
 

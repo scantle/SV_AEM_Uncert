@@ -12,6 +12,7 @@ import os
 import pyemu
 import pandas as pd
 from pathlib import Path
+import project_paths as paths
 import shutil
 
 #----------------------------------------------------------------------------------------------------------------------#
@@ -19,14 +20,14 @@ import shutil
 #----------------------------------------------------------------------------------------------------------------------#
 
 pst_file = 'svihm_ies.pst'
-f_dir = Path('06_Outputs/03_good_but_local/')
+f_dir = paths.run_dir('03_good_but_local')
 
-restart_dir = Path("C:/Projects/SVIHM/2025_R2P_PEST_Calib_restart")
+restart_dir = paths.RUNS_DIR / '2025_R2P_PEST_Calib_restart'
 restart_dir.mkdir(parents=True, exist_ok=True)
 
 # Directories
 orig_dir  = os.getcwd()
-ref_pest_dir = Path("C:/Projects/SVIHM/2025_R2P_PEST_Calib")
+ref_pest_dir = paths.RUNS_DIR / '2025_R2P_PEST_Calib'
 
 
 #----------------------------------------------------------------------------------------------------------------------#

@@ -2,6 +2,7 @@ import matplotlib
 matplotlib.use('TkAgg')
 import os
 from pathlib import Path
+import project_paths as paths
 import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
@@ -15,7 +16,7 @@ from sklearn.pipeline import make_pipeline
 # Setup
 #----------------------------------------------------------------------------------------------------------------------#
 
-f_dir = Path('06_Outputs/02_still_timeouts_then_power_outage')
+f_dir = paths.run_dir('02_still_timeouts_then_power_outage')
 
 par_file   = f_dir / "svihm_ies.2.par.csv"
 obs_file   = f_dir / "svihm_ies.2.obs.csv"

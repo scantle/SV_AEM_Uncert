@@ -4,6 +4,7 @@ import matplotlib.dates as mdates
 import pandas as pd
 import flopy
 from pathlib import Path
+import project_paths as paths
 from tqdm import tqdm
 
 # -------------------------------------------------------------------------------------------------------------------- #
@@ -11,12 +12,12 @@ from tqdm import tqdm
 # -------------------------------------------------------------------------------------------------------------------- #
 
 # Base realization
-run_base_dir = Path('/Users/leland/Documents/ModelRuns/2025_R2P_PEST_Calib_iter3/SVIHM/MODFLOW')
+run_base_dir = paths.RUNS_DIR / '2025_R2P_PEST_Calib_iter3' / 'SVIHM' / 'MODFLOW'
 
 # Parent directory containing ensemble LST outputs
-ens_dir = Path('./06_Outputs/06_wtfx/BUD_SFRBUD_ensemble/')
+ens_dir = paths.run_dir('06_wtfx') / 'BUD_SFRBUD_ensemble'
 
-out_dir = Path('./05_Plots/modflow_budget_uncertainty')
+out_dir = paths.PLOT_DIR / 'modflow_budget_uncertainty'
 out_dir.mkdir(parents=True, exist_ok=True)
 
 mf_nam = 'SVIHM'

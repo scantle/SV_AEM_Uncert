@@ -7,6 +7,7 @@ import geopandas as gpd
 import flopy as fp
 import pyemu
 from pathlib import Path
+import project_paths as paths
 from tqdm import tqdm
 from shapely.geometry import Point, Polygon
 from shapely.ops import unary_union
@@ -21,15 +22,15 @@ from sklearn.neighbors import NearestNeighbors
 # ----------------------------------------------------------------------------------------------------------------------
 
 # Directories
-out_dir   = Path('./04_PEST_setup/')
-data_dir  = Path('./01_Data/')
-shp_dir   = data_dir / 'GIS/'
-plt_dir   = Path('./05_Plots/')
+out_dir   = paths.PEST_DIR
+data_dir  = paths.DATA_DIR
+shp_dir   = paths.GIS_DIR
+plt_dir   = paths.PLOT_DIR
 
 out_dir.mkdir(parents=True, exist_ok=True)
 
 # MODFLOW
-model_dir = Path('./02_Models/SVIHM_MF_working/')
+model_dir = paths.MODEL_DIR
 mf_dir = model_dir / 'MODFLOW'
 preproc_dir = model_dir / 'preproc'
 model_name = 'svihm'
@@ -72,7 +73,7 @@ PPSETS = {
         "maxpts": 16
     },
     "kv_mult_pp": {
-        "shp": shp_dir / 'mult_pp.shp',
+        "shp": paths.DERIVED_GIS_DIR / 'mult_pp.shp',
         "targets": ['kv_mult'],
         "gs": kv_mult_gs,
         "tpl_pattern": 'pp_kv_var_L{lay}.dat.tpl',
@@ -82,7 +83,7 @@ PPSETS = {
 }
 kvme_pp = {
     "lth_var_pp": {
-        "shp": shp_dir / 'litho_pp.shp',
+        "shp": paths.DERIVED_GIS_DIR / 'litho_pp.shp',
         "targets": ['lth_var'],
         "gs": lth_nug_gs,
         "tpl_pattern": 'pp_lth_var_L{lay}.dat.tpl',
@@ -90,7 +91,7 @@ kvme_pp = {
         "maxpts": 4
     },
     "aem_var_pp": {
-        "shp": shp_dir / 'aem_pp.shp',
+        "shp": paths.DERIVED_GIS_DIR / 'aem_pp.shp',
         "targets": ['aem_var'],
         "gs": aem_nug_gs,
         "tpl_pattern": 'pp_aem_var_L{lay}.dat.tpl',
@@ -231,8 +232,8 @@ L2_poly = active_polygon_from_mask(mg, L2_mask)
 # Read datasets for kriging AEM/borehole variance
 # ----------------------------------------------------------------------------------------------------------------------
 if kvme_pp_flag:
-    borehole_data = pd.read_csv(data_dir / 'lithologs.csv')
-    aem_data = pd.read_csv(data_dir / 'aemlogs.csv')
+    borehole_data = pd.read_csv(paths.DERIVED_DIR / 'lithologs.csv')
+    aem_data = pd.read_csv(paths.DERIVED_DIR / 'aemlogs.csv')
 
     # Constrain to unique locations, based on a name
     aem_data['WELL_INFO_ID'] = aem_data['LINE_NO'].astype(int).astype(str) + "_" + aem_data['FID'].astype(int).astype(str)
@@ -364,7 +365,7 @@ for tag, cfg in tqdm(PPSETS.items(), 'PP Set', total=len(PPSETS.keys())):
 # ----------------------------------------------------------------------------------------------------------------------
 # Write CSVs (with actual parnmes + groups)
 # ----------------------------------------------------------------------------------------------------------------------
-init_dir = data_dir / "pp_init_csv"
+init_dir = paths.PP_INIT_DIR
 init_dir.mkdir(exist_ok=True, parents=True)
 
 for tag, cfg in tqdm(PPSETS.items(), 'PP Set', total=len(PPSETS.keys())):

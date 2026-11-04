@@ -3,6 +3,7 @@ matplotlib.use('TkAgg')
 import numpy as np
 import pandas as pd
 from pathlib import Path
+import project_paths as paths
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 import mapclassify
@@ -17,7 +18,7 @@ from tqdm import tqdm
 
 # MODFLOW settings
 #model_dir = Path('C:/Projects/SVIHM/2025_R2P_PEST_Calib_iter3/SVIHM/MODFLOW/')
-model_dir = Path('/Volumes/Macintosh HD/Users/leland/Documents/ModelRuns/2025_R2P_PEST_Calib_iter3/SVIHM/MODFLOW/')
+model_dir = paths.RUNS_DIR / '2025_R2P_PEST_Calib_iter3' / 'SVIHM' / 'MODFLOW'
 model_name = 'SVIHM'
 
 xoff = 499977
@@ -39,7 +40,7 @@ plt.rcParams.update({
 })
 
 # Output
-plt_dir = Path('05_Plots/MF_props/')
+plt_dir = paths.PLOT_DIR / 'MF_props'
 plt_dir.mkdir(parents=True, exist_ok=True)
 
 # -------------------------------------------------------------------------------------------------------------------- #

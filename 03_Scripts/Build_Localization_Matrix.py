@@ -9,6 +9,7 @@ from math import sqrt
 import pyemu
 from sklearn.neighbors import KDTree
 from pathlib import Path
+import project_paths as paths
 from tqdm import tqdm
 
 
@@ -16,13 +17,13 @@ from tqdm import tqdm
 # Settings
 #----------------------------------------------------------------------------------------------------------------------#
 
-data_dir = Path('01_Data')
-pest_dir = Path("04_PEST_setup")
+data_dir = paths.DATA_DIR
+pest_dir = paths.PEST_DIR
 gis_dir  = data_dir / 'GIS'
 
 # For various reasons, I'm not allowed to share this file with the well locations
 # Please contact me if you have any questions!
-hob_key_file = Path('C:/Users/lelan/Documents/CodeProjects/SVIHM/SVIHM_Input_Files/reference_data_for_plots/_hob_key.csv')
+hob_key_file = paths.SVIHM_REPO / 'SVIHM_Input_Files' / 'reference_data_for_plots' / '_hob_key.csv'
 
 # horizontal / vertical ranges (meters) and sills by PP family - Exponential Variogram
 # must match 04_Write_Initial_PilotPoint_Files.py
@@ -68,18 +69,18 @@ def exp_kernel(dx, dy, ah):
 #----------------------------------------------------------------------------------------------------------------------#
 
 # Read in private hob location file
-hob_key = pd.read_csv(hob_key_file)
+hob_key = pd.read_csv(paths.private_file(hob_key_file))
 hob_key = hob_key[['well_id', 'x_proj', 'y_proj']].drop_duplicates()
 
 # Read in head observations written by 05_B_build_HOB_ins_n_obs.py
-hob_obs = pd.read_csv(data_dir / 'head_obs_master.csv')
+hob_obs = pd.read_csv(paths.DERIVED_DIR / 'head_obs_master.csv')
 hob_obs = hob_obs.rename({'obval': 'obsval', 'group': 'obgnme', 'stdev': 'standard_deviation'}, axis=1)
 
 # Drop zero-weighted obs
 hob_obs = hob_obs.loc[hob_obs['weight']>0.0]
 
 # Read pilot point files
-pp_init_files = [item for item in sorted((data_dir / 'pp_init_csv').glob("**/*.csv"))]
+pp_init_files = [item for item in sorted(paths.PP_INIT_DIR.glob("**/*.csv"))]
 pp_init_dfs = []
 for pp_init in pp_init_files:
     df = pd.read_csv(pp_init)
@@ -123,9 +124,9 @@ os.remove('temp.pst')  # immediate cleanup :)
 
 # It would be much simpler to read in the PST file but that would create a circular dependency...
 # so alas... update the pst object with the head weights
-hob_obs = pd.read_csv(data_dir / 'head_obs_master.csv', index_col='obsnme')
+hob_obs = pd.read_csv(paths.DERIVED_DIR / 'head_obs_master.csv', index_col='obsnme')
 hob_obs = hob_obs.rename({'obval': 'obsval', 'group': 'obgnme', 'stdev': 'standard_deviation'}, axis=1)
-sfr_obs = pd.read_csv(data_dir / 'streamflow_obs_std.csv', index_col='obsnme')
+sfr_obs = pd.read_csv(paths.DERIVED_DIR / 'streamflow_obs_std.csv', index_col='obsnme')
 sfr_obs = sfr_obs.rename({'obsgnme': 'obgnme'}, axis=1)  # I hate these abbreviations
 obs = pst.observation_data
 for df in [hob_obs, sfr_obs]:

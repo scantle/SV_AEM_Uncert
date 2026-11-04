@@ -14,6 +14,7 @@ import flopy as fp
 import json
 import pyemu
 from pathlib import Path
+import project_paths as paths
 from tqdm import tqdm
 from scipy.stats import lognorm
 from sklearn.neighbors import NearestNeighbors
@@ -28,9 +29,9 @@ from aem_read import read_xyz, aem_wide2long
 #----------------------------------------------------------------------------------------------------------------------#
 
 # Directories
-data_dir = Path ('./01_Data/')
-shp_dir = data_dir / 'GIS/'
-plt_dir = Path('./05_Plots/')
+data_dir = paths.DATA_DIR
+shp_dir = paths.GIS_DIR
+plt_dir = paths.PLOT_DIR
 
 # Files
 litho_file = data_dir / 'AEM_WELL_LITHOLOGY_csv_WO2_20220710_CVHM.csv'
@@ -43,7 +44,7 @@ aem_sharp_sv_file = shp_dir / 'aem_sv_Sharp_I01_MOD_inv_UTM10N.shp'
 sv_model_domain_file = shp_dir / 'Model_Domain_20180222.shp'
 
 # MODFLOW Model
-mf_dir = Path('./02_Models/SVIHM_MF_working/MODFLOW/')
+mf_dir = paths.MF_DIR
 model_name = 'svihm'
 xoff = 499977
 yoff = 4571330
@@ -256,7 +257,7 @@ litho = litho.rename({'LITH_TOP_DEPTH_m': 'TOP_DEPTH_m', 'LITH_BOT_DEPTH_m': 'BO
 
 # Write out litho_df file
 out_cols = ['WELL_INFO_ID','row','col','layer','x','y','z','GROUND_SURFACE_ELEVATION_m','TOP_DEPTH_m','BOT_DEPTH_m','tex']
-litho[out_cols].to_csv(data_dir / 'lithologs.csv', index=False)
+litho[out_cols].to_csv(paths.DERIVED_DIR / 'lithologs.csv', index=False)
 
 #----------------------------------------------------------------------------------------------------------------------#
 
@@ -315,6 +316,6 @@ aem_long = aem_long.rename({'DEP_TOP': 'TOP_DEPTH_m', 'DEP_BOT': 'BOT_DEPTH_m', 
 
 # Write out litho_df file
 out_cols = ['LINE_NO','FID','row','col','layer','x','y','z','GROUND_SURFACE_ELEVATION_m','TOP_DEPTH_m','BOT_DEPTH_m','RHO_I','RHO_I_STD']
-aem_long[out_cols].to_csv(data_dir / 'aemlogs.csv', index=False)
+aem_long[out_cols].to_csv(paths.DERIVED_DIR / 'aemlogs.csv', index=False)
 
 #----------------------------------------------------------------------------------------------------------------------#

@@ -4,6 +4,7 @@ import geopandas as gpd
 from shapely.geometry import Point, Polygon
 from shapely.ops import unary_union
 from pathlib import Path
+import project_paths as paths
 import flopy
 
 #----------------------------------------------------------------------------------------------------------------------#
@@ -11,14 +12,14 @@ import flopy
 #----------------------------------------------------------------------------------------------------------------------#
 
 # Directories
-data_dir = Path('./01_Data/')
-shp_dir = data_dir / 'GIS/'
+data_dir = paths.DATA_DIR
+shp_dir = paths.GIS_DIR
 
-out_dir = data_dir / 'PPlocs'
+out_dir = paths.PP_LOC_DIR
 out_dir.mkdir(exist_ok=True)
 
 # MODFLOW Model
-mf_dir = Path('./02_Models/SVIHM_MF_working/MODFLOW/')
+mf_dir = paths.MF_DIR
 model_name = 'svihm'
 xoff = 499977
 yoff = 4571330
@@ -185,7 +186,7 @@ def active_polygon_from_mask(mg, layer_mask):
 
 m = flopy.modflow.Modflow.load(f"{model_name}.nam", model_ws=mf_dir, check=False, forgive=True, load_only=['DIS','BAS6'])
 
-wells_shpfile = shp_dir / "hobwells.shp"
+wells_shpfile = paths.private_file(shp_dir / "hobwells.shp")
 
 # Analysis Settings
 streams_path=None       # e.g., river polyline shapefile
@@ -303,8 +304,8 @@ gdf_L2 = gdf_L2.query("L2_status != 'far'").copy()
 
 # Merge and save layer-specific outputs
 pp_by_layer = pd.concat([gdf_L1, gdf_L2], ignore_index=True)
-pp_by_layer.to_file(shp_dir / f"{out_prefix}.shp")
+pp_by_layer.to_file(paths.DERIVED_GIS_DIR / f"{out_prefix}.shp")
 pp_by_layer.drop(columns="geometry").to_csv(out_dir / f"{out_prefix}.csv", index=False)
 
-print(f"Saved: {(shp_dir / f'{out_prefix}.shp').name}")
-print(f"Saved: {(shp_dir / f'{out_prefix}.csv').name}")
+print(f"Saved: {(paths.DERIVED_GIS_DIR / f'{out_prefix}.shp').name}")
+print(f"Saved: {(out_dir / f'{out_prefix}.csv').name}")

@@ -5,6 +5,7 @@ import pyemu
 import flopy
 from tqdm import tqdm
 from pathlib import Path
+import project_paths as paths
 import shutil
 import glob
 
@@ -17,19 +18,18 @@ model_name = 'SVIHM'
 
 # Directories
 orig_dir  = os.getcwd()
-pest_dir  = Path("C:/Projects/SVIHM/2025_R2P_PEST_Calib")  # previous build folder
-work_dir  = Path("C:/Projects/SVIHM/2025_Calib_iter3_natveg_low")  # build folder
-data_dir  = Path('01_Data')
+pest_dir  = paths.RUNS_DIR / '2025_R2P_PEST_Calib'  # previous build folder
+work_dir  = paths.RUNS_DIR / '2025_Calib_iter3_natveg_low'  # build folder
+data_dir  = paths.DATA_DIR
 #exe_dir   = Path('02_Models/Bin')
-scpt_dir  = Path('03_Scripts/')
+scpt_dir  = paths.SCRIPT_DIR
 #model_dir = Path('02_Models/SVIHM_MF_working')
 #mf_dir    = model_dir / 'MODFLOW'
-pest_exe_dir = Path('C:/Users/lelan/Documents/Models/pest17')
-pestpp_exe = Path('C:/Users/lelan/Documents/Models/pestpp-5.2.16-iwin/bin/pestpp-swp.exe')
+pestpp_exe = paths.pestpp_exe('pestpp-swp')
 
 # Files from calibration
 pst_file = 'svihm_ies.pst'
-ensb_par = Path('06_Outputs/06_wtfx/svihm_ies.3.par.csv')
+ensb_par = paths.run_dir('06_wtfx') / 'svihm_ies.3.par.csv'
 
 scen_name = 'natveg_high'
 
