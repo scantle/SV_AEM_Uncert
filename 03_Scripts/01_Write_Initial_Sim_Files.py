@@ -43,7 +43,7 @@ aem_sharp_sv_file = shp_dir / 'aem_sv_Sharp_I01_MOD_inv_UTM10N.shp'
 sv_model_domain_file = shp_dir / 'Model_Domain_20180222.shp'
 
 # MODFLOW Model
-mf_dir = Path('./02_Models/SVIHM_MF/')
+mf_dir = Path('./02_Models/SVIHM_MF_working/MODFLOW/')
 model_name = 'svihm'
 xoff = 499977
 yoff = 4571330

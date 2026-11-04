@@ -18,7 +18,7 @@ out_dir = data_dir / 'PPlocs'
 out_dir.mkdir(exist_ok=True)
 
 # MODFLOW Model
-mf_dir = Path('./02_Models/SVIHM_MF/')
+mf_dir = Path('./02_Models/SVIHM_MF_working/MODFLOW/')
 model_name = 'svihm'
 xoff = 499977
 yoff = 4571330

@@ -18,7 +18,7 @@ in_dir = Path('./01_Data/')
 plt_dir = Path('./05_Plots')
 
 # MODFLOW Model
-mf_dir = Path('./02_Models/SVIHM_MF/')
+mf_dir = Path('./02_Models/SVIHM_MF_working/MODFLOW/')
 model_name = 'svihm'
 xoff = 499977
 yoff = 4571330
