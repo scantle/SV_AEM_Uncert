@@ -1,0 +1,59 @@
+# Prerequisites
+*.d
+
+# Compiled Object files
+*.slo
+*.lo
+*.o
+*.obj
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Compiled Dynamic libraries
+*.so
+*.dylib
+*.dll
+
+# Fortran module files
+*.mod
+*.smod
+
+# Compiled Static libraries
+*.lai
+*.la
+*.a
+*.lib
+
+# Executables
+*.exe
+*.out
+*.app
+
+# Compiled HTML
+*.html
+*.htm
+
+# VS junk
+*.u2d
+*.suo
+
+# Generated folders
+Debug/**
+release/**
+x64/**
+mfUSGLib/Release/**
+mfUSGLib/x64/**
+mfUSGLib/Debug/**
+T2PTests/Release/**
+T2PTests/x64/**
+T2PTests/Debug/**
+
+# Extras
+*.vfproj.*
+*.7z
+*.lock
+*.pdb
+*.intermediate.manifest
+*.vsidx
