@@ -35,19 +35,33 @@ model_dir = paths.MODEL_DIR
 mf_dir    = model_dir / 'MODFLOW'
 pestpp_exe = paths.pestpp_exe('pestpp-ies')
 
-# After we have some runs...
-
-#base_par_update = Path('06_Outputs/05_novolt_drnostreams/svihm_ies.2.base.par')
-#base_par_update = Path('C:/Projects/SVIHM/2025_R2P_PEST_Calib_manual_runs/pst04_iter01_goodpars/svihm_ies.base.par')
-# base_par_update = Path('06_Outputs/06_wtfx/svihm_ies.3.base.par')
-base_par_update = None
-
-ensb_par_update = paths.run_dir('06_wtfx') / 'svihm_ies.3.par.csv'
-ensb_num = 0
+# Prior for non-pilot point parameters: center, transform, prior std dev (log10 units if log), hard limits
+prior_file = data_dir / 'prior_parameters.csv'
 
 # Out
 pst_file = 'svihm_ies.pst'
 ensemble_size = 500
+
+# Bounds are placed at +/- n_sd prior std devs (transformed space) so they are rarely reached
+n_sd = 3.0
+
+# Pilot point priors by family (center from the pp_init CSVs written by 04)
+#   sd in transformed units (log10 if log), hard_lo/hard_hi limit the bounds
+#   scale multipliers: ratio to the previous (finer) texture's scale, must stay > 1 to keep order
+PP_PRIOR = {
+    "kv_mult":   dict(transform='none', sd=1.0,  hard_lo=-3.0, hard_hi=3.0),
+    "scale_1FF": dict(transform='log',  sd=0.06, hard_lo=0.5,  hard_hi=1.5),
+    "scale_2MF": dict(transform='log',  sd=0.1,  hard_lo=1.05, hard_hi=None),
+    "scale_3SC": dict(transform='log',  sd=0.1,  hard_lo=1.05, hard_hi=None),
+    "scale_3MC": dict(transform='log',  sd=0.1,  hard_lo=1.05, hard_hi=None),
+    "scale_4VC": dict(transform='log',  sd=0.1,  hard_lo=1.05, hard_hi=None),
+    "aem_var":   dict(transform='none', sd=None, hard_lo=0.0,  hard_hi=5.0),   # KVME only
+    "lth_var":   dict(transform='none', sd=None, hard_lo=0.0,  hard_hi=5.0),   # KVME only
+}
+
+# Prior filter on derived texture properties (reported, not silent)
+filt_kvc = (10.0, 200.0)   # m/d, very coarse K
+filt_anff_max = 100.0      # fine-fine anisotropy
 
 # horizontal / vertical ranges (meters) and sills by PP family - Exponential Variogram
 # must match 04_Write_Initial_PilotPoint_Files.py
@@ -110,16 +124,38 @@ def exp_cov3d(names, x, y, z, ah, av, sill=1.0, nugget=0.0):
 
 #----------------------------------------------------------------------------------------------------------------------#
 
-def build_full_cov_with_pp_blocks(pst, pp_pars, sigma_range=4.0):
+def prior_sd_and_bounds(center, transform, sd, hard_lo=None, hard_hi=None, n_sd=3.0):
+    """
+    Bounds at center +/- n_sd * sd in transformed space. If a hard limit falls inside that, the sd is
+    reduced so the bound sits at the hard limit, keeping the bounds n_sd std devs from the center.
+    Returns (sd, lbnd, ubnd, tightened)
+    """
+    if transform == 'log':
+        f, finv = np.log10, lambda v: 10.0 ** v
+    else:
+        f, finv = (lambda v: v), (lambda v: v)
+    c = f(center)
+    sd_new = sd
+    if hard_lo is not None and not pd.isna(hard_lo):
+        sd_new = min(sd_new, (c - f(hard_lo)) / n_sd)
+    if hard_hi is not None and not pd.isna(hard_hi):
+        sd_new = min(sd_new, (f(hard_hi) - c) / n_sd)
+    if sd_new <= 0:
+        raise ValueError(f'Prior center {center} is on or outside its hard limits ({hard_lo}, {hard_hi})')
+    return sd_new, finv(c - n_sd * sd_new), finv(c + n_sd * sd_new), sd_new < sd
+
+#----------------------------------------------------------------------------------------------------------------------#
+
+def build_full_cov_with_pp_blocks(pst, pp_pars, prior_sd):
     """
     pst: pyemu.Pst
     pp_pars: DataFrame indexed by parnme with columns ['pargp','X','Y','Z','Layer']
+    prior_sd: Series of prior std devs (transformed space) indexed by parnme, for ALL adjustable params
     returns: pyemu.Cov covering ALL adjustable params, with PP sub-blocks filled by 3D geostats
     """
-    # 1) base diagonal from bounds for ALL params
-    full_cov = pyemu.Cov.from_parameter_data(pst, sigma_range=sigma_range)
-    F = full_cov.as_2d
-    order = list(full_cov.row_names)
+    # 1) base diagonal from the prior std devs
+    order = list(pst.adj_par_names)
+    F = np.diag(prior_sd.loc[order].values ** 2)
 
     # Fill in those diagonals from pilot point covariances
     families = ["aem_var","lth_var","kv_mult"] + sorted({g.split("_L")[0] for g in pp_pars["pargp"] if g.startswith("scale_")})
@@ -131,11 +167,13 @@ def build_full_cov_with_pp_blocks(pst, pp_pars, sigma_range=4.0):
             cfg = PP_GS['scale']
         else:
             cfg = PP_GS[fam]
+        # correlation (sill 1) scaled by each pilot point's prior std dev
         C = exp_cov3d(names=sub.index.values,
                       x=sub["X"].values, y=sub["Y"].values, z=sub["Z"].values, ah=cfg["ah"], av=cfg["av"])
+        sd = prior_sd.loc[C.row_names].values
         # inject block
         idx = [order.index(nm) for nm in C.row_names]
-        F[np.ix_(idx, idx)] = C.as_2d
+        F[np.ix_(idx, idx)] = C.as_2d * np.outer(sd, sd)
 
     # 3) return as pyemu.Cov (same ordering as pst)
     return pyemu.Cov(x=F, names=order)
@@ -233,6 +271,80 @@ def bound_pressure_report(pst, pe, top_k=15):
         print("No out-of-bounds draws.")
 
 #----------------------------------------------------------------------------------------------------------------------#
+
+def pp_family(pargp, families):
+    for fam in families:
+        if pargp.startswith(fam):
+            return fam
+    raise ValueError(f'No pilot point prior for group {pargp}')
+
+#----------------------------------------------------------------------------------------------------------------------#
+
+def assign_priors(par, pp_pars, prior_par, pp_prior, n_sd=3.0):
+    """
+    Sets parval1 (prior center), partrans, scale/offset and bounds (center +/- n_sd prior std devs) on the
+    pst parameter data. Pilot point centers come from the pp_init CSVs, others from the prior table.
+    Returns the prior std dev of every parameter (transformed space) and a summary table by group.
+    """
+    sd_out = {}
+    rows = []
+
+    # Pilot points
+    pp_names = par.index.intersection(pp_pars.index)
+    for nm in pp_names:
+        grp = pp_pars.loc[nm, 'pargp']
+        cfg = pp_prior[pp_family(grp, pp_prior.keys())]
+        center = pp_pars.loc[nm, 'parval1']
+        sd = cfg['sd'] if cfg['sd'] is not None else (cfg['hard_hi'] - cfg['hard_lo']) / (2 * n_sd)
+        sd, lb, ub, tight = prior_sd_and_bounds(center, cfg['transform'], sd, cfg['hard_lo'], cfg['hard_hi'], n_sd)
+        par.loc[nm, ['parval1', 'pargp', 'partrans', 'parlbnd', 'parubnd']] = [center, grp, cfg['transform'], lb, ub]
+        sd_out[nm] = sd
+        rows.append([nm, grp, cfg['transform'], center, sd, lb, ub, tight])
+
+    # Everything else
+    other = par.index.difference(pp_names)
+    missing = other.difference(prior_par.index)
+    if len(missing) > 0:
+        raise ValueError(f'Parameters without a prior in {prior_file.name}: {list(missing)}')
+    for nm in other:
+        p = prior_par.loc[nm]
+        sd, lb, ub, tight = prior_sd_and_bounds(p['center'], p['transform'], p['sd'], p['hard_lo'], p['hard_hi'], n_sd)
+        par.loc[nm, ['parval1', 'pargp', 'partrans', 'parlbnd', 'parubnd', 'scale', 'offset']] = \
+            [p['center'], p['pargp'], p['transform'], lb, ub, p['scale'], p['offset']]
+        sd_out[nm] = sd
+        rows.append([nm, p['pargp'], p['transform'], p['center'], sd, lb, ub, tight])
+
+    df = pd.DataFrame(rows, columns=['parnme', 'pargp', 'transform', 'center', 'sd', 'lbnd', 'ubnd', 'sd_tightened'])
+    summary = df.groupby('pargp').agg(n=('parnme', 'size'), transform=('transform', 'first'),
+                                      center_min=('center', 'min'), center_max=('center', 'max'),
+                                      sd_min=('sd', 'min'), sd_max=('sd', 'max'),
+                                      lbnd_min=('lbnd', 'min'), ubnd_max=('ubnd', 'max'),
+                                      n_sd_tightened=('sd_tightened', 'sum'))
+    return pd.Series(sd_out), summary
+
+#----------------------------------------------------------------------------------------------------------------------#
+
+def draw_prior(pst, cov, n_reals, filt_kvc, filt_anff_max, oversample=5, seed=42):
+    """
+    Draws the prior ensemble from cov (full covariance, so cross-group/layer correlation is kept), reports
+    draws outside bounds, then applies the texture filter and reports its acceptance rate.
+    """
+    pe = pyemu.ParameterEnsemble.from_gaussian_draw(pst, cov=cov, num_reals=n_reals*oversample, by_groups=False)
+    bnds = pst.parameter_data.loc[pe.columns, ['parlbnd', 'parubnd']]
+    out = (pe.lt(bnds['parlbnd'], axis=1) | pe.gt(bnds['parubnd'], axis=1)).mean(0)
+    print(f'Draws outside bounds: max {out.max():.2%} of draws, {(out > 0.01).sum()} parameters above 1%')
+    print(out.groupby(pst.parameter_data.loc[out.index, 'pargp']).max().sort_values(ascending=False).head(10))
+    pe.enforce()
+
+    # Filter on derived texture properties
+    tex, _ = t2p_par2par_chain(pd.DataFrame(pe, columns=pe.columns))
+    keep = (tex.k_vc > filt_kvc[0]) & (tex.k_vc < filt_kvc[1]) & (tex.an_ff < filt_anff_max)
+    print(f'Texture filter acceptance: {keep.mean():.1%} ({keep.sum()} of {len(keep)})')
+    if keep.sum() < n_reals:
+        raise ValueError('Not enough draws pass the texture filter; revisit the texture priors')
+    return pe.loc[keep[keep].index].sample(frac=1.0, random_state=seed).iloc[:n_reals].reset_index(drop=True)
+
+#----------------------------------------------------------------------------------------------------------------------#
 # Read in necessary model files, setup spatial reference
 #----------------------------------------------------------------------------------------------------------------------#
 
@@ -269,22 +381,8 @@ mg = gwf.modelgrid
 mg.set_coord_info(xoff=xoff, yoff=yoff)
 pp_pars['Z'] = get_model_zeds_at_locs(mg, pp_pars)
 
-prev_par = pd.read_csv(data_dir / 'starting_values.csv', index_col='parnme')
-
-if base_par_update is not None:
-    if base_par_update.suffix=='.par':  # Generated by PEST-IES
-        # Update starting values from parfile
-        base_update_par = pd.read_table(base_par_update, sep="\\s+", skiprows=1, index_col=0,
-                                        names=['par', 'parval1', 'scale', 'offset'])
-    elif base_par_update.suffix=='.csv':  # exported from par file by python
-        # Update starting values from parfile
-        base_update_par = pd.read_csv(base_par_update, index_col=0)
-else:
-    base_update_par = None
-
-if ensb_par_update is not None:
-    # Read the ensemble parameter file (rows = realizations, cols = parameters)
-    ens_pe = pd.read_csv(ensb_par_update, index_col=0)
+prior_par = pd.read_csv(prior_file, index_col='parnme')
+prior_par.index = prior_par.index.str.lower()
 
 #----------------------------------------------------------------------------------------------------------------------#
 # File Management
@@ -412,69 +510,14 @@ if obs.loc[obs.standard_deviation.isna(), :].count().max() > 0:
 # Get param pointer
 par = pst.parameter_data
 
-# Pilot point init values
+# Prior centers, transforms, std devs and bounds for every parameter
 pp_pars.index = pp_pars.index.str.lower()
-pp_updated = 0
-for col in ['parval1', 'pargp']:
-    par.loc[par.index.intersection(pp_pars.index), col] = pp_pars.loc[par.index.intersection(pp_pars.index), col]
-
-# Checks
-pp_updated += par.loc[par.index.intersection(pp_pars.index), col].count()
-print(f'Updated {pp_updated} / {pp_pars.shape[0]} pars in PP CSVs')
-
-# Pilot point transforms, bounds (by group)
-par.loc[par.index.intersection(pp_pars.index), 'partrans'] = 'none'
-par.loc[par.pargp=='kv_mult', ['parlbnd','parubnd']] = (-3.0, 3.0)
-if kvme_pp_flag:
-    par.loc[par.pargp=='aem_var', ['parlbnd','parubnd']] = (0.0, 5.0)
-    par.loc[par.pargp=='lth_var', ['parlbnd','parubnd']] = (0.0, 5.0)
-par.loc[par.pargp.str.contains('scale'), ['parlbnd','parubnd']] = (1.1, 3.3)
-par.loc[par.pargp.str.contains('scale_1FF'), ['parlbnd','parubnd']] = (0.5, 1.5)
-
-# Previous parameters (overwrite any previously set values)
-par_updated = 0
-for col in ['parval1', 'parlbnd', 'parubnd', 'pargp', 'scale', 'offset']:
-    par.loc[par.index.intersection(prev_par.index), col] = prev_par.loc[par.index.intersection(prev_par.index), col]
-
-# Check
-par_updated += par.loc[par.index.intersection(prev_par.index), col].shape[0]
-print(f'Updated {par_updated} / {prev_par.shape[0]} pars in prev CSV')
-if par_updated != prev_par.shape[0]:
-    print('Failed to update prev pars:')
-    print(prev_par.index.difference(par.index))
-par_updated -= prev_par.loc[prev_par.index.intersection(pp_pars.index), col].shape[0]  # double counting
-print(f'In total, {pp_updated + par_updated} / {par.shape[0]} parameters have been updated.')
+prior_sd, prior_table = assign_priors(par, pp_pars, prior_par, PP_PRIOR, n_sd=n_sd)
+prior_table.to_csv(paths.DERIVED_DIR / 'prior_summary.csv')
+print(prior_table.to_string())
 
 # Check (base) texture parameters
 print(t2p_par2par_frompar(par))
-
-if base_update_par is not None:
-    par.loc[base_update_par.index, "parval1"] = base_update_par['parval1']
-    par_updated = par.loc[base_update_par.index, "parval1"].shape[0]
-    print(f'Updated {par_updated} / {par.shape[0]} parameters from {base_par_update.name}.')
-    print(t2p_par2par_frompar(par))
-elif ensb_par_update is not None:
-
-    # Realization IDs are often strings, so normalize to str for safety
-    ens_pe.index = ens_pe.index.astype(str)
-
-    target_real = str(ensb_num)
-    if target_real not in ens_pe.index:
-        raise ValueError(f"Ensemble member {ensb_num} not found in {ensb_par_update}.")
-
-    # Grab the row for the chosen ensemble member
-    ens_row = ens_pe.loc[target_real]
-
-    # Make sure parameter names align with pst.parameter_data index
-    # (par index is already lower-case; enforce the same for columns)
-    ens_row.index = ens_row.index.str.lower()
-
-    common = par.index.intersection(ens_row.index)
-
-    par.loc[common, "parval1"] = ens_row.loc[common].values
-    print(f"Updated {len(common)} parameters from ensemble member {ensb_num} "
-          f"({ensb_par_update.name}).")
-    print(t2p_par2par_frompar(par))
 
 #----------------------------------------------------------------------------------------------------------------------#
 # Weight balancing
@@ -505,19 +548,14 @@ elif ensb_par_update is not None:
 #----------------------------------------------------------------------------------------------------------------------#
 
 # build full cov with PP blocks
-full_cov = build_full_cov_with_pp_blocks(pst, pp_pars, sigma_range=3.0)
+full_cov = build_full_cov_with_pp_blocks(pst, pp_pars, prior_sd)
 full_cov.to_coo("parcov.jcb")
 pst.pestpp_options["parcov"] = "parcov.jcb"
 
 # full_cov.to_ascii(work_dir / "parcov.cov")
 # pst.pestpp_options["parcov"] = "parcov.cov"
 
-potential_pe = pyemu.ParameterEnsemble.from_gaussian_draw(pst, cov=full_cov, num_reals=ensemble_size*5)
-potential_pe.enforce()
-tex_pars, _ = t2p_par2par_chain(pd.DataFrame(potential_pe, columns=potential_pe.adj_names))
-# Some filtering because the multiplier approach can come up with some wild values
-good_rows = tex_pars.loc[(tex_pars.k_vc < 200) & (tex_pars.k_vc > 10) & (tex_pars.an_ff < 100)].index.tolist()
-prior_pe = potential_pe.loc[good_rows].sample(frac=1.0, random_state=42).iloc[:ensemble_size].reset_index(drop=True)
+prior_pe = draw_prior(pst, full_cov, ensemble_size, filt_kvc, filt_anff_max)
 
 prior_pe.to_csv("prior_pe.csv")
 pst.pestpp_options["ies_parameter_ensemble"] = "prior_pe.csv"

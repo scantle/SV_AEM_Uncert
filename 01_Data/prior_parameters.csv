@@ -1,0 +1,130 @@
+parnme,pargp,center,transform,sd,hard_lo,hard_hi,scale,offset,source
+kminff1,k,0.24,log,0.5,0.0001,10,1.0,0.0,Scantlebury & Harter (2026) texture table
+kminmf1_m,k_m,26.6667,log,0.3,1.0,100,1.0,0.0,Scantlebury & Harter (2026) texture table; ratio >= 1 keeps texture order
+kminsc1_m,k_m,5.27813,log,0.3,1.0,100,1.0,0.0,Scantlebury & Harter (2026) texture table; ratio >= 1 keeps texture order
+kminmc1_m,k_m,1,log,0.3,,100,1.0,0.0,Scantlebury & Harter (2026) texture table (MC = VC = SC); no ordering limit since centred on 1
+kminvc1_m,k_m,1,log,0.3,,100,1.0,0.0,Scantlebury & Harter (2026) texture table (MC = VC = SC); no ordering limit since centred on 1
+anisovc1,aniso,3.27852,log,0.2,1.0,10,1.0,0.0,Scantlebury & Harter (2026) texture table
+anisomc1_m,aniso_m,2.51334,log,0.2,1.0,20,1.0,0.0,Scantlebury & Harter (2026) texture table; ratio >= 1 keeps order
+anisosc1_m,aniso_m,1.08815,log,0.2,1.0,20,1.0,0.0,Scantlebury & Harter (2026) texture table; ratio >= 1 keeps order
+anisomf1_m,aniso_m,1.08725,log,0.2,1.0,20,1.0,0.0,Scantlebury & Harter (2026) texture table; ratio >= 1 keeps order
+anisoff1_m,aniso_m,1.13259,log,0.2,1.0,20,1.0,0.0,Scantlebury & Harter (2026) texture table; ratio >= 1 keeps order
+ssff1,ss,0.000224,log,0.5,1e-05,0.01,1.0,0.0,Scantlebury & Harter (2026) texture table
+ssmf1_m,ss_m,0.761352,log,0.2,0.1,1.0,1.0,0.0,Scantlebury & Harter (2026) texture table; ratio <= 1 keeps order
+sssc1_m,ss_m,0.570784,log,0.2,0.1,1.0,1.0,0.0,Scantlebury & Harter (2026) texture table; ratio <= 1 keeps order
+ssmc1_m,ss_m,0.461042,log,0.2,0.1,1.0,1.0,0.0,Scantlebury & Harter (2026) texture table; ratio <= 1 keeps order
+ssvc1_m,ss_m,0.457695,log,0.2,0.1,1.0,1.0,0.0,Scantlebury & Harter (2026) texture table; ratio <= 1 keeps order
+sysc1,sy,0.25,log,0.08,0.1,0.4,1.0,0.0,Scantlebury & Harter (2026) texture table
+symf1_m,sy_m,0.119751,log,0.15,0.01,1.5,1.0,0.0,Scantlebury & Harter (2026) texture table
+syff1_m,sy_m,0.788847,log,0.15,0.01,1.5,1.0,0.0,Scantlebury & Harter (2026) texture table
+symc1_m,sy_m,0.800298,log,0.15,0.01,1.5,1.0,0.0,Scantlebury & Harter (2026) texture table
+syvc1_m,sy_m,0.193089,log,0.15,0.01,1.5,1.0,0.0,Scantlebury & Harter (2026) texture table
+khp1,plp,75.0,none,8.0,25,100,0.01,0.0,judgement: Kh toward arithmetic (p=0.75); pre-IES value 93
+kvp1,plp,62.0,none,12.0,15,100,-0.01,0.0,pre-IES starting value (commit 4342385); p=-0.62 (geometric to harmonic)
+ie_flood,irreff,0.65,log,0.1,0.5,0.8,1.0,0.0,"mid of advisor bounds; lumped, data-based, may exceed 1"
+ie_wl_pas,irreff,0.9,log,0.1,0.8,1.0,1.0,0.0,"mid of advisor bounds; lumped, data-based, may exceed 1"
+ie_cp_pas,irreff,0.9,log,0.1,0.8,1.0,1.0,0.0,"mid of advisor bounds; lumped, data-based, may exceed 1"
+ie_wl_grn,irreff,1.1,log,0.1,1.0,1.2,1.0,0.0,"mid of advisor bounds; lumped, data-based, may exceed 1"
+ie_cp_grn,irreff,1.1,log,0.1,1.0,1.2,1.0,0.0,"mid of advisor bounds; lumped, data-based, may exceed 1"
+kcm_alf,kvm,1.0,log,0.1,0.9,1.1,1.0,0.0,"Kc multiplier, bounds as before"
+kcm_grn,kvm,1.0,log,0.1,0.9,1.1,1.0,0.0,"Kc multiplier, bounds as before"
+kcm_pas,kvm,1.0,log,0.1,0.9,1.1,1.0,0.0,"Kc multiplier, bounds as before"
+kcm_nat,kvm,1.0,log,0.1,0.9,1.1,1.0,0.0,"Kc multiplier, bounds as before"
+rdm_grn,rdm,1.0,log,0.1,0.5,2.0,1.0,0.0,"root depth multiplier, bounds as before"
+rdm_pas,rdm,1.0,log,0.1,0.5,2.0,1.0,0.0,"root depth multiplier, bounds as before"
+rdm_nat,rdm,1.0,log,0.1,0.5,2.0,1.0,0.0,"root depth multiplier, bounds as before"
+sbcm01,msfr,1.0,log,0.2,,,1.0,0.0,streambed K multiplier on cell Kv
+sbcm02,msfr,1.0,log,0.2,,,1.0,0.0,streambed K multiplier on cell Kv
+sbcm03,msfr,1.0,log,0.2,,,1.0,0.0,streambed K multiplier on cell Kv
+sbcm04,msfr,1.0,log,0.2,,,1.0,0.0,streambed K multiplier on cell Kv
+sbcm05,msfr,1.0,log,0.2,,,1.0,0.0,streambed K multiplier on cell Kv
+sbcm06,msfr,1.0,log,0.2,,,1.0,0.0,streambed K multiplier on cell Kv
+sbcm07,msfr,1.0,log,0.2,,,1.0,0.0,streambed K multiplier on cell Kv
+sbcm08,msfr,1.0,log,0.2,,,1.0,0.0,streambed K multiplier on cell Kv
+sbcm09,msfr,1.0,log,0.2,,,1.0,0.0,streambed K multiplier on cell Kv
+sbcm10,msfr,1.0,log,0.2,,,1.0,0.0,streambed K multiplier on cell Kv
+sbcm11,msfr,1.0,log,0.2,,,1.0,0.0,streambed K multiplier on cell Kv
+sbcm12,msfr,1.0,log,0.2,,,1.0,0.0,streambed K multiplier on cell Kv
+sbcm13,msfr,1.0,log,0.2,,,1.0,0.0,streambed K multiplier on cell Kv
+sbcm14,msfr,1.0,log,0.2,,,1.0,0.0,streambed K multiplier on cell Kv
+sbcm15,msfr,1.0,log,0.2,,,1.0,0.0,streambed K multiplier on cell Kv
+sbcm16,msfr,1.0,log,0.2,,,1.0,0.0,streambed K multiplier on cell Kv
+sbcm17,msfr,1.0,log,0.2,,,1.0,0.0,streambed K multiplier on cell Kv
+sbcm18,msfr,1.0,log,0.2,,,1.0,0.0,streambed K multiplier on cell Kv
+sbcm19,msfr,1.0,log,0.2,,,1.0,0.0,streambed K multiplier on cell Kv
+sbcm20,msfr,1.0,log,0.2,,,1.0,0.0,streambed K multiplier on cell Kv
+sbcm21,msfr,1.0,log,0.2,,,1.0,0.0,streambed K multiplier on cell Kv
+sbcm22,msfr,1.0,log,0.2,,,1.0,0.0,streambed K multiplier on cell Kv
+sbcm23,msfr,1.0,log,0.2,,,1.0,0.0,streambed K multiplier on cell Kv
+sbcm24,msfr,1.0,log,0.2,,,1.0,0.0,streambed K multiplier on cell Kv
+sbcm25,msfr,1.0,log,0.2,,,1.0,0.0,streambed K multiplier on cell Kv
+sbcm26,msfr,1.0,log,0.2,,,1.0,0.0,streambed K multiplier on cell Kv
+sbcm27,msfr,1.0,log,0.2,,,1.0,0.0,streambed K multiplier on cell Kv
+sbcm28,msfr,1.0,log,0.2,,,1.0,0.0,streambed K multiplier on cell Kv
+sbcm29,msfr,1.0,log,0.2,,,1.0,0.0,streambed K multiplier on cell Kv
+sbcm30,msfr,1.0,log,0.2,,,1.0,0.0,streambed K multiplier on cell Kv
+str_mult_wildcat,str_mult,1.0,log,0.15,,,1.0,0.0,"Leland 2026-11-05: centred on 1, ungauged streams"
+str_mult_mcc_main,str_mult,1.0,log,0.15,,,1.0,0.0,"Leland 2026-11-05: centred on 1, ungauged streams"
+str_mult_mcc_branch,str_mult,1.0,log,0.15,,,1.0,0.0,"Leland 2026-11-05: centred on 1, ungauged streams"
+str_mult_miners,str_mult,1.0,log,0.15,,,1.0,0.0,"Leland 2026-11-05: centred on 1, ungauged streams"
+str_mult_french,str_mult,1.0,log,0.15,,,1.0,0.0,"Leland 2026-11-05: centred on 1, ungauged streams"
+str_mult_clark,str_mult,1.0,log,0.15,,,1.0,0.0,"Leland 2026-11-05: centred on 1, ungauged streams"
+str_mult_etna,str_mult,1.0,log,0.15,,,1.0,0.0,"Leland 2026-11-05: centred on 1, ungauged streams"
+str_mult_hearts,str_mult,1.0,log,0.15,,,1.0,0.0,"Leland 2026-11-05: centred on 1, ungauged streams"
+str_mult_shell,str_mult,1.0,log,0.15,,,1.0,0.0,"Leland 2026-11-05: centred on 1, ungauged streams"
+str_mult_hamlin,str_mult,1.0,log,0.15,,,1.0,0.0,"Leland 2026-11-05: centred on 1, ungauged streams"
+str_mult_johnson,str_mult,1.0,log,0.15,,,1.0,0.0,"Leland 2026-11-05: centred on 1, ungauged streams"
+str_mult_crystal,str_mult,1.0,log,0.15,,,1.0,0.0,"Leland 2026-11-05: centred on 1, ungauged streams"
+str_mult_patterson,str_mult,1.0,log,0.15,,,1.0,0.0,"Leland 2026-11-05: centred on 1, ungauged streams"
+str_mult_kidder,str_mult,1.0,log,0.15,,,1.0,0.0,"Leland 2026-11-05: centred on 1, ungauged streams"
+str_mult_moffett,str_mult,1.0,log,0.15,,,1.0,0.0,"Leland 2026-11-05: centred on 1, ungauged streams"
+str_mult_mcadams,str_mult,1.0,log,0.15,,,1.0,0.0,"Leland 2026-11-05: centred on 1, ungauged streams"
+str_mult_indian,str_mult,1.0,log,0.15,,,1.0,0.0,"Leland 2026-11-05: centred on 1, ungauged streams"
+str_mult_rattlesnake,str_mult,1.0,log,0.15,,,1.0,0.0,"Leland 2026-11-05: centred on 1, ungauged streams"
+str_mult_mill,str_mult,1.0,log,0.15,,,1.0,0.0,"Leland 2026-11-05: centred on 1, ungauged streams"
+str_mult_shackleford,str_mult,1.0,log,0.15,,,1.0,0.0,"Leland 2026-11-05: centred on 1, ungauged streams"
+str_mult_sniktaw,str_mult,1.0,log,0.15,,,1.0,0.0,"Leland 2026-11-05: centred on 1, ungauged streams"
+str_mult_patternson,str_mult,1.0,log,0.15,,,1.0,0.0,"Leland 2026-11-05: centred on 1, ungauged streams"
+catch_mult_01,catch_mult,0.9,log,0.15,,,1.0,0.0,"Leland 2026-11-05: MFR start 0.9, not data-based"
+catch_mult_02,catch_mult,0.9,log,0.15,,,1.0,0.0,"Leland 2026-11-05: MFR start 0.9, not data-based"
+catch_mult_03,catch_mult,0.9,log,0.15,,,1.0,0.0,"Leland 2026-11-05: MFR start 0.9, not data-based"
+catch_mult_04,catch_mult,0.9,log,0.15,,,1.0,0.0,"Leland 2026-11-05: MFR start 0.9, not data-based"
+catch_mult_05,catch_mult,0.9,log,0.15,,,1.0,0.0,"Leland 2026-11-05: MFR start 0.9, not data-based"
+catch_mult_06,catch_mult,0.9,log,0.15,,,1.0,0.0,"Leland 2026-11-05: MFR start 0.9, not data-based"
+catch_mult_07,catch_mult,0.9,log,0.15,,,1.0,0.0,"Leland 2026-11-05: MFR start 0.9, not data-based"
+catch_mult_08,catch_mult,0.9,log,0.15,,,1.0,0.0,"Leland 2026-11-05: MFR start 0.9, not data-based"
+catch_mult_09,catch_mult,0.9,log,0.15,,,1.0,0.0,"Leland 2026-11-05: MFR start 0.9, not data-based"
+catch_mult_10,catch_mult,0.9,log,0.15,,,1.0,0.0,"Leland 2026-11-05: MFR start 0.9, not data-based"
+catch_mult_11,catch_mult,0.9,log,0.15,,,1.0,0.0,"Leland 2026-11-05: MFR start 0.9, not data-based"
+catch_mult_12,catch_mult,0.9,log,0.15,,,1.0,0.0,"Leland 2026-11-05: MFR start 0.9, not data-based"
+catch_mult_13,catch_mult,0.9,log,0.15,,,1.0,0.0,"Leland 2026-11-05: MFR start 0.9, not data-based"
+catch_mult_14,catch_mult,0.9,log,0.15,,,1.0,0.0,"Leland 2026-11-05: MFR start 0.9, not data-based"
+catch_mult_15,catch_mult,0.9,log,0.15,,,1.0,0.0,"Leland 2026-11-05: MFR start 0.9, not data-based"
+catch_mult_16,catch_mult,0.9,log,0.15,,,1.0,0.0,"Leland 2026-11-05: MFR start 0.9, not data-based"
+catch_mult_17,catch_mult,0.9,log,0.15,,,1.0,0.0,"Leland 2026-11-05: MFR start 0.9, not data-based"
+catch_mult_18,catch_mult,0.9,log,0.15,,,1.0,0.0,"Leland 2026-11-05: MFR start 0.9, not data-based"
+catch_mult_19,catch_mult,0.9,log,0.15,,,1.0,0.0,"Leland 2026-11-05: MFR start 0.9, not data-based"
+catch_mult_20,catch_mult,0.9,log,0.15,,,1.0,0.0,"Leland 2026-11-05: MFR start 0.9, not data-based"
+catch_mult_21,catch_mult,0.9,log,0.15,,,1.0,0.0,"Leland 2026-11-05: MFR start 0.9, not data-based"
+catch_mult_22,catch_mult,0.9,log,0.15,,,1.0,0.0,"Leland 2026-11-05: MFR start 0.9, not data-based"
+catch_mult_23,catch_mult,0.9,log,0.15,,,1.0,0.0,"Leland 2026-11-05: MFR start 0.9, not data-based"
+catch_mult_24,catch_mult,0.9,log,0.15,,,1.0,0.0,"Leland 2026-11-05: MFR start 0.9, not data-based"
+catch_mult_25,catch_mult,0.9,log,0.15,,,1.0,0.0,"Leland 2026-11-05: MFR start 0.9, not data-based"
+catch_mult_26,catch_mult,0.9,log,0.15,,,1.0,0.0,"Leland 2026-11-05: MFR start 0.9, not data-based"
+catch_mult_27,catch_mult,0.9,log,0.15,,,1.0,0.0,"Leland 2026-11-05: MFR start 0.9, not data-based"
+catch_mult_28,catch_mult,0.9,log,0.15,,,1.0,0.0,"Leland 2026-11-05: MFR start 0.9, not data-based"
+catch_mult_29,catch_mult,0.9,log,0.15,,,1.0,0.0,"Leland 2026-11-05: MFR start 0.9, not data-based"
+catch_mult_30,catch_mult,0.9,log,0.15,,,1.0,0.0,"Leland 2026-11-05: MFR start 0.9, not data-based"
+catch_mult_31,catch_mult,0.9,log,0.15,,,1.0,0.0,"Leland 2026-11-05: MFR start 0.9, not data-based"
+catch_mult_32,catch_mult,0.9,log,0.15,,,1.0,0.0,"Leland 2026-11-05: MFR start 0.9, not data-based"
+catch_mult_33,catch_mult,0.9,log,0.15,,,1.0,0.0,"Leland 2026-11-05: MFR start 0.9, not data-based"
+catch_mult_34,catch_mult,0.9,log,0.15,,,1.0,0.0,"Leland 2026-11-05: MFR start 0.9, not data-based"
+catch_mult_35,catch_mult,0.9,log,0.15,,,1.0,0.0,"Leland 2026-11-05: MFR start 0.9, not data-based"
+catch_mult_36,catch_mult,0.9,log,0.15,,,1.0,0.0,"Leland 2026-11-05: MFR start 0.9, not data-based"
+catch_mult_37,catch_mult,0.9,log,0.15,,,1.0,0.0,"Leland 2026-11-05: MFR start 0.9, not data-based"
+catch_mult_38,catch_mult,0.9,log,0.15,,,1.0,0.0,"Leland 2026-11-05: MFR start 0.9, not data-based"
+catch_mult_39,catch_mult,0.9,log,0.15,,,1.0,0.0,"Leland 2026-11-05: MFR start 0.9, not data-based"
+catch_mult_40,catch_mult,0.9,log,0.15,,,1.0,0.0,"Leland 2026-11-05: MFR start 0.9, not data-based"
+catch_mult_41,catch_mult,0.9,log,0.15,,,1.0,0.0,"Leland 2026-11-05: MFR start 0.9, not data-based"
+catch_mult_42,catch_mult,0.9,log,0.15,,,1.0,0.0,"Leland 2026-11-05: MFR start 0.9, not data-based"
+catch_mult_43,catch_mult,0.9,log,0.15,,,1.0,0.0,"Leland 2026-11-05: MFR start 0.9, not data-based"
