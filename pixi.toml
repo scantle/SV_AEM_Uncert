@@ -1,0 +1,34 @@
+[workspace]
+name = "sv-aem-uncert"
+version = "0.1.0"
+channels = ["conda-forge"]
+platforms = ["win-64"]
+
+# Forward model scripts (run inside every PEST worker)
+[feature.worker.dependencies]
+python = "3.12.*"
+numpy = ">=2.0,<3"
+pandas = ">=2.2,<3"
+scipy = "*"
+flopy = "*"
+pyemu = "*"
+tqdm = "*"
+scikit-learn = "*"
+
+[feature.worker.pypi-dependencies]
+hydroeval = "*"
+# Not the PyPI package of the same name
+t2py = { git = "https://github.com/scantle/t2py.git", rev = "c8de2c5a46d393fe7ae098c823c9620c58a0662a" }
+
+# Workflow, analysis and plotting scripts
+[feature.analysis.dependencies]
+matplotlib = "*"
+seaborn = "*"
+geopandas = "*"
+shapely = "*"
+mapclassify = "*"
+gstools = "*"
+
+[environments]
+default = ["worker", "analysis"]
+worker = { features = ["worker"], no-default-feature = true }

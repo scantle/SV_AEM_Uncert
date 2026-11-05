@@ -22,11 +22,14 @@ This repository holds the calibration setup, workflow scripts, and analysis.
 
 ## Setup
 
-1. Create the conda environment:
+1. Install [pixi](https://pixi.sh) (PowerShell: `irm -useb https://pixi.sh/install.ps1 | iex`), then from the
+   repo root:
    ```
-   conda env create -f conda_env.yml
-   conda activate SV_AEM_T2P
+   pixi install
+   pixi run python 03_Scripts/01_Write_Initial_Sim_Files.py
    ```
+   `pixi.toml` has two environments: `default` (everything) and `worker` (only what the forward run needs).
+   Versions are pinned in `pixi.lock`.
 2. Copy `local_paths_example.json` to `local_paths.json` and edit it for your machine:
    - `archive_dir`: folder holding `06_Outputs/` from previous calibrations (optional)
    - `runs_dir`: where PEST build folders and model run copies go
@@ -72,7 +75,15 @@ Building the PEST setup:
 (`kvme_pp_flag` in script 06). This method is not used, has not been tested, and is not recommended.
 
 Forward run (`02_Models/SVIHM_MF_working/svihm.bat`): par2par → `RES2PAR_preproc.py` → Texture2Par →
-`STREAM_ADJUSTER.py` → SWBM → SFR2PAR → MODFLOW-NWT → post-processors.
+`STREAM_ADJUSTER.py` → SWBM → SFR2PAR → MODFLOW-NWT → post-processors. Python is run as `%IES_PYTHON%`, or the
+active environment's python (e.g. within `pixi run -e worker`).
+
+Running PEST-IES: script 06 writes the build folder (including `pixi.toml`, `pixi.lock`, and a
+`build_manifest.json` of file hashes). Copy the build folder to each computer (local drive only) and run
+`start_ies.bat`. It finds pixi, installs the `worker` environment, asks for the number of workers and whether
+the computer is the host, and creates a new `<build>_batch_<time>` folder next to the build folder with
+manager/worker folders. Files changed after the build are refused. Stop a batch with its `stop_runs.bat`.
+Workers connect to the host on TCP port 4004.
 
 Analysis of a finished run: scripts `07`–`17`, plus `big_fj_plot.py`, `par_shift_analysis.py`, and
 `10_Residual_Analysis.py`. Script 10 writes optional observation weight multipliers

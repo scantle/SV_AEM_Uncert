@@ -8,6 +8,8 @@ from pathlib import Path
 import project_paths as paths
 import shutil
 import glob
+import json
+import hashlib
 
 #----------------------------------------------------------------------------------------------------------------------#
 # Setup
@@ -313,10 +315,21 @@ for f in fm_scripts:
     shutil.copy2(scpt_dir/ f, fmdir / 'Bin')
 
 # Remove and remake target directory, copy in files
+# (keeps .pixi so batches already launched from this folder keep their python)
 if work_dir.exists():
-    shutil.rmtree(work_dir)
-shutil.copytree(pest_dir, work_dir)
+    for f in work_dir.iterdir():
+        if f.name == '.pixi':
+            continue
+        if f.is_dir():
+            shutil.rmtree(f)
+        else:
+            f.unlink()
+shutil.copytree(pest_dir, work_dir, dirs_exist_ok=True)
 shutil.copy2(pestpp_exe, work_dir)
+
+# Worker python environment
+shutil.copy2(paths.ROOT / 'pixi.toml', work_dir)
+shutil.copy2(paths.ROOT / 'pixi.lock', work_dir)
 
 # Set as working directory to appease pyemu
 os.chdir(work_dir)
@@ -533,4 +546,22 @@ pst.pestpp_options["ies_autoadaloc"] = True
 pst.pestpp_options["ies_autoadaloc_sigma_dist"] = 2
 
 pst.write(pst_file, version=2)
+
+#----------------------------------------------------------------------------------------------------------------------#
+# Build manifest (launch_ies.py copies only these files, and checks they haven't changed)
+#----------------------------------------------------------------------------------------------------------------------#
+
+manifest = {}
+for f in sorted(work_dir.rglob('*')):
+    rel = f.relative_to(work_dir)
+    if f.is_dir() or rel.parts[0] == '.pixi' or '__pycache__' in rel.parts or rel.name == 'build_manifest.json':
+        continue
+    h = hashlib.sha256()
+    with open(f, 'rb') as fh:
+        for chunk in iter(lambda: fh.read(1024 * 1024), b''):
+            h.update(chunk)
+    manifest[rel.as_posix()] = h.hexdigest()
+with open(work_dir / 'build_manifest.json', 'w') as f:
+    json.dump(manifest, f, indent=2)
+
 os.chdir(orig_dir)

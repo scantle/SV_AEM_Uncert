@@ -1,19 +1,23 @@
-:: load python 
-call conda activate SV_AEM_T2P
+:: Python environment (set by run_ies.cmd, or the active pixi/conda env)
+if not defined IES_PYTHON if defined CONDA_PREFIX set "IES_PYTHON=%CONDA_PREFIX%\python.exe"
+if not defined IES_PYTHON (
+    echo ERROR: IES_PYTHON is not set. Start runs with start_ies.bat, or use pixi run -e worker.
+    exit /b 2
+)
 
 :: Run par2par
 call Bin\par2par.exe t2p_par2par.in
 
 :: Run preproc, T2P
 cd preproc
-python ..\Bin\RES2PAR_preproc.py
+"%IES_PYTHON%" ..\Bin\RES2PAR_preproc.py
 call ..\Bin\Texture2Par.exe svihm.t2p
 
 :: Adjust streamflow, Run SWBM
 cd ..\SWBM
 del subwatershed_nonirrigation_inflows.txt
 del subwatershed_irrigation_inflows.txt
-python ..\Bin\STREAM_ADJUSTER.py
+"%IES_PYTHON%" ..\Bin\STREAM_ADJUSTER.py
 call ..\Bin\SWBM.exe svihm.swbm
 
 :: Copy over new SWBM-generated MODFLOW files
@@ -31,12 +35,11 @@ cd MODFLOW
 call ..\Bin\MODFLOW-NWT.exe SVIHM.nam
 
 :: Run python post processors
-python ..\Bin\LOGSTRSIM.py Streamflow_FJ_SVIHM.dat MidptFlow --obs-csv FJ_log.csv
-python ..\Bin\LOGSTRSIM.py Streamflow_AS_SVIHM.dat MidptFlow --obs-csv AS_log.csv
-python ..\Bin\LOGSTRSIM.py Streamflow_BY_SVIHM.dat MidptFlow --obs-csv BY_log.csv
-python ..\Bin\LOGSTRSIM.py Streamflow_SCK_SVIHM.dat MidptFlow --obs-csv SCK_log.csv
-python ..\Bin\GAGE2VOL.py Streamflow_FJ_SVIHM.dat 1990-09-30 5
-python ..\Bin\HOBPOSTPROC.py HobData_SVIHM.dat head_obs_master.csv
-conda deactivate
+"%IES_PYTHON%" ..\Bin\LOGSTRSIM.py Streamflow_FJ_SVIHM.dat MidptFlow --obs-csv FJ_log.csv
+"%IES_PYTHON%" ..\Bin\LOGSTRSIM.py Streamflow_AS_SVIHM.dat MidptFlow --obs-csv AS_log.csv
+"%IES_PYTHON%" ..\Bin\LOGSTRSIM.py Streamflow_BY_SVIHM.dat MidptFlow --obs-csv BY_log.csv
+"%IES_PYTHON%" ..\Bin\LOGSTRSIM.py Streamflow_SCK_SVIHM.dat MidptFlow --obs-csv SCK_log.csv
+"%IES_PYTHON%" ..\Bin\GAGE2VOL.py Streamflow_FJ_SVIHM.dat 1990-09-30 5
+"%IES_PYTHON%" ..\Bin\HOBPOSTPROC.py HobData_SVIHM.dat head_obs_master.csv
 
 cd ..\

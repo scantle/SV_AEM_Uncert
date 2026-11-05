@@ -196,6 +196,7 @@ cython_debug/
 # Custom to ignore intermediate output
 04_PEST_setup/*
 !04_PEST_setup/*.bat
+!04_PEST_setup/launch_ies.py
 05_Plots/
 06_Outputs/
 *.fac
@@ -220,3 +221,6 @@ local_paths.json
 
 # Private well data
 01_Data/GIS/hobwells.*
+
+# pixi environments
+.pixi/
