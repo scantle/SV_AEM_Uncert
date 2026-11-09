@@ -58,6 +58,10 @@ np.random.seed(667)
 
 origin_date = pd.to_datetime('1990-9-30')
 
+# 7-day block targets (blocks counted from the first model day; blocks with fewer observed days are dropped)
+block_days = 7
+block_min_days = 5
+
 # unit conversions
 def f_m3d_to_cfs(y): return np.asarray(y) / cfs_to_m3d
 def f_cfs_to_m3d(y): return np.asarray(y) * cfs_to_m3d
@@ -360,33 +364,37 @@ def uncert_hydrograph(
     sd_col="sd_lin",
     date_col="date",
     regime_col="regime",
-    figsize=(10, 4),
+    figsize=(7.0, 2.8),
     dpi=300,
+    blocks=None,
+    show_daily_sd=None,
 ):
     """
-    Plot hydrograph with ±sd band and no visual interpolation across missing days.
+    Plot observed daily hydrograph with the block targets (mean ± sd given to IES), no visual interpolation
+    across missing days.
 
     Features:
-      - Montserrat font (fallback if not installed)
+      - Daily observed flow as context; daily ± sd band only when show_daily_sd (default: when no blocks)
       - Secondary y-axis in CFS
       - Regime-derived threshold between low & in-bank flow (dotted, in legend)
-      - Gridlines + cleaner axes styling
     """
 
     font_family = "DejaVu Sans"
 
     plt.rcParams.update({
         "font.family": font_family,
-        # "font.size": 10,
-        # "axes.titlesize": 11,
-        # "axes.labelsize": 10,
-        # "legend.fontsize": 9,
-        # "xtick.labelsize": 9,
-        # "ytick.labelsize": 9,
+        "font.size": 9,
+        "axes.labelsize": 9,
+        "legend.fontsize": 8,
+        "xtick.labelsize": 8,
+        "ytick.labelsize": 8,
         "figure.dpi": dpi,
         "savefig.dpi": dpi,
-        # "axes.linewidth": 0.8,
+        "savefig.bbox": "tight",
+        "axes.linewidth": 0.8,
     })
+    if show_daily_sd is None:
+        show_daily_sd = blocks is None
 
     df = daily_sd.copy()
     df[date_col] = pd.to_datetime(df[date_col])
@@ -407,26 +415,55 @@ def uncert_hydrograph(
     fig, ax = plt.subplots(1, 1, figsize=figsize, dpi=dpi)
 
     # Main line (breaks automatically at NaNs)
-    ax.plot(df.index, q, linewidth=1.0, label="Obs. Streamflow")
+    ax.plot(df.index, q, linewidth=0.6, color='0.45', label="Observed daily flow")
 
     # Uncertainty band only where valid (no interpolation)
-    ax.fill_between(
-        df.index,
-        (q - sd),
-        (q + sd),
-        where=valid,
-        alpha=0.25,
-        interpolate=False,
-        label="± 1σ",
-    )
+    if show_daily_sd:
+        ax.fill_between(
+            df.index,
+            (q - sd),
+            (q + sd),
+            where=valid,
+            color='0.45',
+            alpha=0.25,
+            linewidth=0,
+            interpolate=False,
+            label="Daily ± 1σ",
+        )
 
-    # Log scale (guard against <=0)
+    # Block targets (log10 mean ± sd, back-transformed), plotted at the block centre; missing blocks break the line
+    if blocks is not None:
+        b = blocks.set_index('date').sort_index()
+        bfull = pd.date_range(b.index.min(), b.index.max(), freq=f'{block_days}D')
+        b = b.reindex(bfull)
+        b.index = b.index + pd.Timedelta(days=(block_days - 1) / 2)
+        b = b.loc[(b.index >= start) & (b.index <= end)]
+        bmid = 10 ** b['obsval']
+        blo = 10 ** (b['obsval'] - b['obsstd'])
+        bhi = 10 ** (b['obsval'] + b['obsstd'])
+        # Dry weeks (target at the log offset floor) are marked along the bottom of a log axis instead of plotted
+        dry = bmid <= 1.0  # log floor in make_obs_table is 0.1 m3/d
+        if logy and dry.any():
+            ax.fill_between(b.index, blo, bhi, where=bmid.notna() & ~dry, color='C0', alpha=0.25, linewidth=0,
+                            interpolate=False, label=f"{block_days}-day target ± 1σ")
+            ax.plot(b.index, bmid.where(~dry), color='C0', linewidth=1.2, label=f"{block_days}-day target")
+        else:
+            ax.fill_between(b.index, blo, bhi, where=bmid.notna(), color='C0', alpha=0.25, linewidth=0,
+                            interpolate=False, label=f"{block_days}-day target ± 1σ")
+            ax.plot(b.index, bmid, color='C0', linewidth=1.2, label=f"{block_days}-day target")
+
+    # Log scale: limits from the data (wet days and non-dry targets), dry targets as markers on the bottom axis
     if logy:
         ax.set_yscale("log")
-        # avoid fill/line blowing up visually if negative/zero exist
-        # ymin = np.nanmin(q[q > 0]) if np.any(q > 0) else None
-        # if ymin is not None:
-        #     ax.set_ylim(bottom=ymin * 0.1)
+        vals = [q[q > 1.0]]
+        if blocks is not None:
+            vals += [blo[~dry], bhi[~dry]]
+        vals = pd.concat(vals).dropna()
+        ylo, yhi = vals.min() / 2, vals.max() * 2
+        ax.set_ylim(ylo, yhi)
+        if blocks is not None and dry.any():
+            ax.plot(b.index[dry], np.full(dry.sum(), ylo * 1.25), linestyle='none', marker='v', markersize=3.5,
+                    color='C0', clip_on=False, label="Zero-flow week")
 
     # --- Regime threshold line (between "low" and "in-bank") ---
     thr = None
@@ -465,16 +502,14 @@ def uncert_hydrograph(
     secax = ax.secondary_yaxis("right", functions=(f_m3d_to_cfs, f_cfs_to_m3d))
     secax.set_ylabel("cfs")
 
-    # Labels/title
-    title = f"{name} Streamflow" if name else "Streamflow"
-    ax.set_title(title)
-    ax.set_xlabel("Date")
-    ax.set_ylabel("m³/d")
+    # Labels (gauge name inside the panel instead of a title)
+    if name:
+        ax.text(0.01, 0.97, name, transform=ax.transAxes, ha='left', va='top', fontweight='bold')
+    ax.set_ylabel("Streamflow (m³/d)")
     ax.set_xlim(start, end)
 
-    # Gridlines (major + light minor)
-    ax.grid(True, which="major", linewidth=0.8, alpha=0.35)
-    ax.grid(True, which="minor", linewidth=0.6, alpha=0.18)
+    # Gridlines (major only)
+    ax.grid(True, which="major", linewidth=0.5, alpha=0.3)
 
     # Date formatting
     ax.xaxis.set_major_locator(mdates.AutoDateLocator(minticks=5, maxticks=9))
@@ -486,9 +521,10 @@ def uncert_hydrograph(
     secax.spines["top"].set_visible(False)
 
     # Legend styling
-    ax.legend(loc="best", frameon=False, ncol=1, handlelength=2.2)
+    ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.1), frameon=False, ncol=4, handlelength=2.0,
+              columnspacing=1.2)
 
-    #fig.tight_layout()
+    fig.tight_layout()
     return fig, ax
 
 #----------------------------------------------------------------------------------------------------------------------#
@@ -607,6 +643,41 @@ def make_obs_table(
     # final order + types
     out = out[["obsnme", "obsval", "obsstd", "weight", "regime", "date"]].sort_values("date").reset_index(drop=True)
     return out
+
+#----------------------------------------------------------------------------------------------------------------------#
+
+def make_block_obs_table(obs_df, gauge_id, low_thresh, start=None, ndays=7, min_days=5):
+    """
+    Block-mean targets from the daily log10 obs table (make_obs_table output).
+      - Fixed blocks of ndays counted from start (first model day), so every gauge uses the same calendar
+      - obsval = mean of daily log10 flow over the observed days in the block
+      - obsstd = RMS of the daily sd: rating errors are persistent, so they are treated as fully correlated
+        within a block (no 1/sqrt(n) reduction)
+      - regime from the block mean flow (linear), same low threshold as the daily data
+    Returns the block table and the day table (obsnme, date) LOGSTRSIM uses to average simulated flow over the
+    same days.
+    """
+    start = origin_date + pd.Timedelta(days=1) if start is None else pd.to_datetime(start)
+    df = obs_df[['date', 'obsval', 'obsstd']].copy()
+    df['block'] = (df['date'] - start).dt.days // ndays
+    df = df[df['block'] >= 0]
+
+    blk = df.groupby('block').agg(
+        n_days=('obsval', 'size'),
+        obsval=('obsval', 'mean'),
+        obsstd=('obsstd', lambda x: float(np.sqrt(np.mean(np.square(x))))),
+        q_mean=('obsval', lambda x: float(np.mean(10 ** x))),
+    )
+    blk = blk[blk['n_days'] >= min_days].copy()
+    blk['date'] = start + pd.to_timedelta(blk.index * ndays, 'D')
+    blk['regime'] = np.where(blk['q_mean'] < low_thresh, 'low', 'inbank')
+    blk['obsnme'] = [f"{gauge_id}_w{d.strftime('%Y%m%d')}" for d in blk['date']]
+
+    days = df[df['block'].isin(blk.index)].merge(blk[['obsnme']], left_on='block', right_index=True)
+    days = days.sort_values('date')[['obsnme', 'date']].reset_index(drop=True)
+
+    blk = blk.sort_values('date').reset_index(drop=True)
+    return blk[['obsnme', 'obsval', 'obsstd', 'regime', 'date', 'n_days', 'q_mean']], days
 
 #----------------------------------------------------------------------------------------------------------------------#
 
@@ -756,16 +827,24 @@ fj_daily_sd['sd_log10'] = StreamflowUncertainty.delta_method_log_sd(fj_daily_sd[
                                                                  fj_daily_sd['q'].to_numpy(),
                                                                  base=10)
 
-# Plots
-stat_plots(fj_daily_sd)
-uncert_hydrograph(fj_daily_sd, start='10/01/2020', end='10/01/2025', name='Fort Jones')
-plt.savefig(plt_dir/'fort_jones_error_model.png', dpi=300)
-
 # Calculate weights by regime
 fj_daily_sd = weights_regime_equalized(fj_daily_sd)
 
 fj_obs = make_obs_table(sd_df=fj_daily_sd, gauge_id=streams[0], transform="log10")
 fj_obs['obsgnme'] = 'str_FJ'
+
+# 7-day block targets
+fj_blk, fj_blk_days = make_block_obs_table(fj_obs, streams[0], fj_q_classes['low'], ndays=block_days,
+                                           min_days=block_min_days)
+fj_blk = weights_regime_equalized(fj_blk)
+fj_blk['obsgnme'] = 'str7d_FJ'
+
+# Plots
+stat_plots(fj_daily_sd)
+uncert_hydrograph(fj_daily_sd, start='10/01/2020', end='10/01/2025', name='Fort Jones', blocks=fj_blk)
+plt.savefig(plt_dir/'fort_jones_error_model.png', dpi=300)
+uncert_hydrograph(fj_daily_sd, start='10/01/2020', end='10/01/2025', name='Fort Jones', blocks=fj_blk, logy=True)
+plt.savefig(plt_dir/'fort_jones_error_model_log.png', dpi=300)
 
 # Monthly volumes (sum of daily m³/d → m³/month) with ≥80% day coverage
 fj_month_vol = sim.make_obs_table_aggregate(gauge_id="FJ", freq='M', agg='sum')
@@ -821,16 +900,22 @@ sck_daily_sd['sd_log10'] = StreamflowUncertainty.delta_method_log_sd(sck_daily_s
 # Protect from zeros
 sck_daily_sd, sck_floor = apply_sd_floor_by_regime(sck_daily_sd)
 
-# Plots
-stat_plots(sck_daily_sd)
-uncert_hydrograph(sck_daily_sd, start='10/01/2016', end='10/01/2018', name='Shackleford')
-plt.savefig(plt_dir/'shackleford_error_model.png', dpi=300)
-
 # Calculate weights by regime
 sck_daily_sd = weights_regime_equalized(sck_daily_sd)
 
 sck_obs = make_obs_table(sd_df=sck_daily_sd, gauge_id=streams[1], transform="log10")
 sck_obs['obsgnme'] = 'str_SCK'
+
+# 7-day block targets
+sck_blk, sck_blk_days = make_block_obs_table(sck_obs, streams[1], sck_q_classes['low'], ndays=block_days,
+                                             min_days=block_min_days)
+sck_blk = weights_regime_equalized(sck_blk)
+sck_blk['obsgnme'] = 'str7d_SCK'
+
+# Plots
+stat_plots(sck_daily_sd)
+uncert_hydrograph(sck_daily_sd, start='10/01/2016', end='10/01/2018', name='Shackleford', blocks=sck_blk, logy=True)
+plt.savefig(plt_dir/'shackleford_error_model.png', dpi=300)
 
 #----------------------------------------------------------------------------------------------------------------------#
 # Above Serpa Lane (AS)
@@ -869,16 +954,22 @@ as_daily_sd['sd_log10'] = StreamflowUncertainty.delta_method_log_sd(as_daily_sd[
 # Protect from zeros
 as_daily_sd, as_floor = apply_sd_floor_by_regime(as_daily_sd)
 
-# Plots
-stat_plots(as_daily_sd)
-uncert_hydrograph(as_daily_sd, name='Above Serpa Lane')
-plt.savefig(plt_dir/'above_serpa_error_model.png', dpi=300)
-
 # Calculate weights by regime
 as_daily_sd = weights_regime_equalized(as_daily_sd)
 
 as_obs = make_obs_table(sd_df=as_daily_sd, gauge_id=streams[2], transform="log10")
 as_obs['obsgnme'] = 'str_AS'
+
+# 7-day block targets
+as_blk, as_blk_days = make_block_obs_table(as_obs, streams[2], as_q_classes['low'], ndays=block_days,
+                                           min_days=block_min_days)
+as_blk = weights_regime_equalized(as_blk)
+as_blk['obsgnme'] = 'str7d_AS'
+
+# Plots
+stat_plots(as_daily_sd)
+uncert_hydrograph(as_daily_sd, name='Above Serpa Lane', blocks=as_blk, logy=True)
+plt.savefig(plt_dir/'above_serpa_error_model.png', dpi=300)
 
 #----------------------------------------------------------------------------------------------------------------------#
 # Below Young's Dam (BY)
@@ -917,16 +1008,22 @@ by_daily_sd['sd_log10'] = StreamflowUncertainty.delta_method_log_sd(by_daily_sd[
 # Protect from zeros
 by_daily_sd, by_floor = apply_sd_floor_by_regime(by_daily_sd)
 
-# Plots
-stat_plots(by_daily_sd)
-uncert_hydrograph(by_daily_sd, name="Below Young's Dam")
-plt.savefig(plt_dir/'below_youngs_dam_error_model.png', dpi=300)
-
 # Calculate weights by regime
 by_daily_sd = weights_regime_equalized(by_daily_sd)
 
 by_obs = make_obs_table(sd_df=by_daily_sd, gauge_id=streams[3], transform="log10")
 by_obs['obsgnme'] = 'str_BY'
+
+# 7-day block targets
+by_blk, by_blk_days = make_block_obs_table(by_obs, streams[3], by_q_classes['low'], ndays=block_days,
+                                           min_days=block_min_days)
+by_blk = weights_regime_equalized(by_blk)
+by_blk['obsgnme'] = 'str7d_BY'
+
+# Plots
+stat_plots(by_daily_sd)
+uncert_hydrograph(by_daily_sd, name="Below Young's Dam", blocks=by_blk, logy=True)
+plt.savefig(plt_dir/'below_youngs_dam_error_model.png', dpi=300)
 
 #----------------------------------------------------------------------------------------------------------------------#
 # Adjust Weights
@@ -935,6 +1032,7 @@ by_obs['obsgnme'] = 'str_BY'
 # FJ is the priority
 fj_obs.loc[fj_obs.regime=='low', 'weight'] *= 2.5
 fj_obs.loc[fj_obs.regime=='inbank', 'weight'] *= 1
+fj_blk.loc[fj_blk.regime=='low', 'weight'] *= 2.5
 
 # Weights from previous run weight analysis
 wmult_file = paths.DERIVED_DIR / "str_wmults.csv"
@@ -955,11 +1053,16 @@ by_obs  = apply_weight_multipliers(by_obs,  wdf)
 fj_month_vol['weight'] = 0.0
 fj_year_vol['weight'] = 0.0
 
+# Daily flows are kept as zero-weight diagnostics; the 7-day blocks are the targets
+for df in [fj_obs, sck_obs, as_obs, by_obs]:
+    df['weight'] = 0.0
+
 #----------------------------------------------------------------------------------------------------------------------#
 # Combine obs tables, write output file
 #----------------------------------------------------------------------------------------------------------------------#
 cols = ['obsnme', 'obsval', 'obsstd', 'weight','obsgnme']
-all_obs = pd.concat([fj_obs[cols], fj_month_vol[cols], fj_year_vol[cols], sck_obs[cols], as_obs[cols], by_obs[cols]], axis=0)
+all_obs = pd.concat([fj_obs[cols], fj_month_vol[cols], fj_year_vol[cols], sck_obs[cols], as_obs[cols], by_obs[cols],
+                     fj_blk[cols], sck_blk[cols], as_blk[cols], by_blk[cols]], axis=0)
 
 all_obs.rename({'obsstd': 'standard_deviation'}, axis=1, inplace=True)
 
@@ -983,6 +1086,14 @@ fj_obs.to_csv(mf_dir / 'FJ_log.csv', index=False)
 sck_obs.to_csv(mf_dir / 'SCK_log.csv', index=False)
 as_obs.to_csv(mf_dir / 'AS_log.csv', index=False)
 by_obs.to_csv(mf_dir / 'BY_log.csv', index=False)
+
+# 7-day block INS files, and the day lists LOGSTRSIM averages over
+for stream, blk, blk_days in zip(streams, [fj_blk, sck_blk, as_blk, by_blk],
+                                 [fj_blk_days, sck_blk_days, as_blk_days, by_blk_days]):
+    write_static_ins_file(blk, pest_dir / f'Streamflow_{stream}_SVIHM_MidptFlow_LOG7D.ins', markers='w')
+    blk_days.to_csv(mf_dir / f'{stream}_log7d.csv', index=False)
+    print(f"{stream}: {len(blk)} 7-day targets from {len(blk_days)} days "
+          f"({blk.regime.value_counts().to_dict()})")
 
 # Write VOLUME INS files
 fj_vol = pd.concat([fj_year_vol[['obsnme', 'obsval',]],

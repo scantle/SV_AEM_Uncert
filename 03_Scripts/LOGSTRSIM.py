@@ -15,6 +15,8 @@ parser = argparse.ArgumentParser(description="Log Transform SFR Reach Output")
 parser.add_argument("streamflow_file", type=str, help="SFR Output Reach file")
 parser.add_argument("column", type=str, help="SFR Output Column")
 parser.add_argument("--obs-csv", type=str, help="Path to obs CSV. If provided, metrics are computed.")
+parser.add_argument("--blocks", type=str, help="Path to block day CSV (obsnme, date). If provided, block means of "
+                                               "the log flow are written to a _LOG7D.out file.")
 
 offset = 1e-1  # same as 05_A_Streamflow_Error_Models.py
 
@@ -46,6 +48,19 @@ if __name__ == "__main__":
     # Write to file
     print(f"Writing {out_file}")
     sfr_out[['Time',args.column]].to_csv(out_file, sep=" ", header=False, index=False)
+
+    # Block means over exactly the observed days of each block (same days as the obs)
+    if args.blocks:
+        blk_file = out_file.replace('_LOG.out', '_LOG7D.out')
+        blk_days = pd.read_csv(args.blocks, parse_dates=['date'])
+        sim_days = pd.DataFrame({'date': origin_date + pd.to_timedelta(sfr_out['Time'], 'days'),
+                                 'sim': sfr_out[args.column]})
+        blk = blk_days.merge(sim_days, how='left', on='date')
+        if blk['sim'].isna().any():
+            raise ValueError(f"{blk['sim'].isna().sum()} block days not in {args.streamflow_file}")
+        blk_mean = blk.groupby('obsnme', sort=False)['sim'].mean()
+        print(f"Writing {blk_file}")
+        blk_mean.to_csv(blk_file, sep=" ", header=False)
 
     # We got obs??
     if args.obs_csv:

@@ -6,6 +6,7 @@ import flopy
 from tqdm import tqdm
 from pathlib import Path
 import project_paths as paths
+import tex_ladder
 import shutil
 import glob
 import json
@@ -47,21 +48,21 @@ n_sd = 3.0
 
 # Pilot point priors by family (center from the pp_init CSVs written by 04)
 #   sd in transformed units (log10 if log), hard_lo/hard_hi limit the bounds
-#   scale multipliers: ratio to the previous (finer) texture's scale, must stay > 1 to keep order
+#   scale_shift: local ln shift of all five ER-texture scales together (0.05 = all scales +5%)
 PP_PRIOR = {
-    "kv_mult":   dict(transform='none', sd=1.0,  hard_lo=-3.0, hard_hi=3.0),
-    "scale_1FF": dict(transform='log',  sd=0.06, hard_lo=0.5,  hard_hi=1.5),
-    "scale_2MF": dict(transform='log',  sd=0.1,  hard_lo=1.05, hard_hi=None),
-    "scale_3SC": dict(transform='log',  sd=0.1,  hard_lo=1.05, hard_hi=None),
-    "scale_3MC": dict(transform='log',  sd=0.1,  hard_lo=1.05, hard_hi=None),
-    "scale_4VC": dict(transform='log',  sd=0.1,  hard_lo=1.05, hard_hi=None),
-    "aem_var":   dict(transform='none', sd=None, hard_lo=0.0,  hard_hi=5.0),   # KVME only
+    "kv_mult":     dict(transform='none', sd=1.0,  hard_lo=-3.0, hard_hi=3.0),
+    "scale_shift": dict(transform='none', sd=0.05, hard_lo=None, hard_hi=None),
+    "aem_var":     dict(transform='none', sd=None, hard_lo=0.0,  hard_hi=5.0),   # KVME only
     "lth_var":   dict(transform='none', sd=None, hard_lo=0.0,  hard_hi=5.0),   # KVME only
 }
 
 # Prior filter on derived texture properties (reported, not silent)
 filt_kvc = (10.0, 200.0)   # m/d, very coarse K
 filt_anff_max = 100.0      # fine-fine anisotropy
+
+# Global ER-texture scale ladder: prior mean and covariance from the bootstrap scale solutions (Scantlebury et al. 2026)
+ladder_boot_file = data_dir / 'rho_dict.json'
+tex_dist_file = data_dir / 'lognorm_dist_clustered.par'
 
 # horizontal / vertical ranges (meters) and sills by PP family - Exponential Variogram
 # must match 04_Write_Initial_PilotPoint_Files.py
@@ -74,6 +75,25 @@ PP_GS = {
     # 'scale_*' handled specially below per texture with same ranges
     "scale":     dict(ah=2317*2, av=78.4,   sill=1.0, nugget=0.0),
 }
+
+# Observation noise correlation, fitted to the residual correlograms of the 2025 calibration (iteration 3)
+#   rho(t) = (1 - sum w) exp(-t/L) + sum_k w_k cos(2 pi k t / 365.25), t in days
+#   AS and BY records are too short to fit, use FJ (all mainstem gauges)
+#   Heads: L only, no seasonal harmonics (would blur the seasonal amplitude the DIFF obs carry)
+OBS_NOISE_KERNEL = {
+    'FJ':    dict(L=36.0, w=[0.040, 0.123, 0.020]),
+    'SCK':   dict(L=24.9, w=[0.169, 0.197, 0.027, 0.006]),
+    'heads': dict(L=40.7, w=[]),
+}
+OBS_NOISE_KERNEL['AS'] = OBS_NOISE_KERNEL['FJ']
+OBS_NOISE_KERNEL['BY'] = OBS_NOISE_KERNEL['FJ']
+obs_noise_origin = pd.to_datetime('1990-10-01')
+
+# Head reading error = per-well offset (reference point / screen) + short-term correlated error (m), must match 05_B
+# Nested piezometers: bottom casing shares the top casing's error plus an independent nest term
+head_offset_sd = 0.3
+head_reading_sd = 0.3
+head_nest_sd = 0.1
 
 # set seed
 np.random.seed(667)
@@ -146,11 +166,12 @@ def prior_sd_and_bounds(center, transform, sd, hard_lo=None, hard_hi=None, n_sd=
 
 #----------------------------------------------------------------------------------------------------------------------#
 
-def build_full_cov_with_pp_blocks(pst, pp_pars, prior_sd):
+def build_full_cov_with_pp_blocks(pst, pp_pars, prior_sd, ladder_cov=None):
     """
     pst: pyemu.Pst
     pp_pars: DataFrame indexed by parnme with columns ['pargp','X','Y','Z','Layer']
     prior_sd: Series of prior std devs (transformed space) indexed by parnme, for ALL adjustable params
+    ladder_cov: DataFrame (names x names) dense block for the scale ladder parameters
     returns: pyemu.Cov covering ALL adjustable params, with PP sub-blocks filled by 3D geostats
     """
     # 1) base diagonal from the prior std devs
@@ -174,6 +195,11 @@ def build_full_cov_with_pp_blocks(pst, pp_pars, prior_sd):
         # inject block
         idx = [order.index(nm) for nm in C.row_names]
         F[np.ix_(idx, idx)] = C.as_2d * np.outer(sd, sd)
+
+    # 2) dense block for the global scale ladder (bootstrap covariance)
+    if ladder_cov is not None:
+        idx = [order.index(nm) for nm in ladder_cov.index]
+        F[np.ix_(idx, idx)] = ladder_cov.values
 
     # 3) return as pyemu.Cov (same ordering as pst)
     return pyemu.Cov(x=F, names=order)
@@ -324,25 +350,122 @@ def assign_priors(par, pp_pars, prior_par, pp_prior, n_sd=3.0):
 
 #----------------------------------------------------------------------------------------------------------------------#
 
-def draw_prior(pst, cov, n_reals, filt_kvc, filt_anff_max, oversample=5, seed=42):
+def draw_prior(pst, cov, n_reals, filt_kvc, filt_anff_max, shapes, oversample=5, seed=42):
     """
     Draws the prior ensemble from cov (full covariance, so cross-group/layer correlation is kept), reports
-    draws outside bounds, then applies the texture filter and reports its acceptance rate.
+    draws outside bounds, then applies the texture filters and reports their acceptance rates.
+    Scale ladder draws outside bounds are rejected rather than clipped (clipping breaks their correlation).
     """
     pe = pyemu.ParameterEnsemble.from_gaussian_draw(pst, cov=cov, num_reals=n_reals*oversample, by_groups=False)
     bnds = pst.parameter_data.loc[pe.columns, ['parlbnd', 'parubnd']]
-    out = (pe.lt(bnds['parlbnd'], axis=1) | pe.gt(bnds['parubnd'], axis=1)).mean(0)
+    oob = pe.lt(bnds['parlbnd'], axis=1) | pe.gt(bnds['parubnd'], axis=1)
+    out = oob.mean(0)
     print(f'Draws outside bounds: max {out.max():.2%} of draws, {(out > 0.01).sum()} parameters above 1%')
     print(out.groupby(pst.parameter_data.loc[out.index, 'pargp']).max().sort_values(ascending=False).head(10))
+    keep_ladder = ~oob[tex_ladder.ladder_names].any(axis=1)
     pe.enforce()
 
     # Filter on derived texture properties
     tex, _ = t2p_par2par_chain(pd.DataFrame(pe, columns=pe.columns))
     keep = (tex.k_vc > filt_kvc[0]) & (tex.k_vc < filt_kvc[1]) & (tex.an_ff < filt_anff_max)
     print(f'Texture filter acceptance: {keep.mean():.1%} ({keep.sum()} of {len(keep)})')
+
+    # Filter on ER-texture probability order (max dip in E[texture] as ER increases)
+    ln_scales = tex_ladder.ladder_lnscales(pe.loc[:, tex_ladder.ladder_names].to_numpy())
+    dip = pd.Series([tex_ladder.order_dip(ls, shapes) for ls in ln_scales], index=pe.index)
+    keep_order = keep_ladder & (dip <= tex_ladder.DIP_MAX)
+    print(f'Scale ladder acceptance: {keep_ladder.mean():.1%} in bounds, {keep_order.mean():.1%} in bounds and '
+          f'dip <= {tex_ladder.DIP_MAX}')
+    keep = keep & keep_order
+    print(f'Combined acceptance: {keep.mean():.1%} ({keep.sum()} of {len(keep)})')
     if keep.sum() < n_reals:
         raise ValueError('Not enough draws pass the texture filter; revisit the texture priors')
     return pe.loc[keep[keep].index].sample(frac=1.0, random_state=seed).iloc[:n_reals].reset_index(drop=True)
+
+#----------------------------------------------------------------------------------------------------------------------#
+
+def corr_noise(dates, sd, L, w, n_reals):
+    """
+    Draws N(0, C) at (irregular) dates with C_ij = sd_i sd_j rho(|t_i - t_j|),
+    rho(t) = (1 - sum w) exp(-t/L) + sum_k w_k cos(2 pi k t / 365.25)
+    Exponential part by exact AR(1) recursion; seasonal part as yearly harmonics with random amplitude and phase
+    that repeat every year. Returns (n_reals, n) array, dates in the same order as given.
+    """
+    t = (pd.to_datetime(pd.Series(dates)) - obs_noise_origin).dt.days.to_numpy(dtype=float)
+    order = np.argsort(t, kind='stable')
+    ts = t[order]
+    z = np.empty((n_reals, len(t)))
+    z[:, 0] = np.random.standard_normal(n_reals)
+    phi = np.exp(-np.diff(ts) / L)
+    for k in range(1, len(ts)):
+        z[:, k] = phi[k-1] * z[:, k-1] + np.sqrt(1 - phi[k-1]**2) * np.random.standard_normal(n_reals)
+    z = np.sqrt(1 - np.sum(w)) * z
+    for k, wk in enumerate(w, start=1):
+        a, b = np.random.standard_normal((2, n_reals, 1)) * np.sqrt(wk)
+        z += a * np.cos(2 * np.pi * k * ts / 365.25)[None, :] + b * np.sin(2 * np.pi * k * ts / 365.25)[None, :]
+    out = np.empty_like(z)
+    out[:, order] = z
+    return out * np.broadcast_to(np.asarray(sd, dtype=float), (len(t),))[None, :]
+
+#----------------------------------------------------------------------------------------------------------------------#
+
+def streamflow_obs_noise(sfr_obs, n_reals):
+    """Correlated noise on the 7-day log10 streamflow targets, by gauge"""
+    blk = sfr_obs[sfr_obs['obgnme'].str.startswith('str7d_') & (sfr_obs['weight'] > 0)]
+    noise = {}
+    for g, b in blk.groupby(blk['obgnme'].str.removeprefix('str7d_').str.upper()):
+        dates = pd.to_datetime(b.index.str.split('_w').str[1], format='%Y%m%d') + pd.Timedelta(days=3)
+        e = corr_noise(dates, b['standard_deviation'], n_reals=n_reals, **OBS_NOISE_KERNEL[g])
+        noise.update(dict(zip(b.index, e.T)))
+    return pd.DataFrame(noise)
+
+#----------------------------------------------------------------------------------------------------------------------#
+
+def head_obs_noise(hob_obs, n_reals):
+    """
+    Noise drawn for each head reading (per-well offset + short-term correlated error), then carried through the
+    same operations 05_B uses: well weighted mean (AVG), deviation from the mean (DIFF), and paired-well
+    difference (VDIFF). Paired well bottom = top well + '_2'; it takes the top well's reading error (nearest date)
+    plus an independent nest term.
+    """
+    diff = hob_obs[hob_obs['obgnme'] == 'hds_diff']
+    avg = hob_obs[hob_obs['obgnme'] == 'hds_avg']
+    vd = hob_obs[hob_obs['obgnme'] == 'hds_vdiff']
+    nested = {f'{top}_2': top for top in vd['wellid'].unique()}
+    noise, reading, head, sd_ratio = {}, {}, {}, []
+    for well, g in diff.groupby('wellid'):
+        dates = pd.to_datetime(g['date']).to_numpy()
+        if well in nested:
+            if nested[well] not in reading:
+                raise ValueError(f'Top well {nested[well]} must be processed before {well}')
+            top = reading[nested[well]]
+            e = top.iloc[top.index.get_indexer(dates, method='nearest')].to_numpy().T + \
+                corr_noise(g['date'], head_nest_sd, n_reals=n_reals, **OBS_NOISE_KERNEL['heads'])
+        else:
+            e = corr_noise(g['date'], head_reading_sd, n_reals=n_reals, **OBS_NOISE_KERNEL['heads']) + \
+                np.random.standard_normal((n_reals, 1)) * head_offset_sd
+        wt = g['weight'].to_numpy()
+        if wt.sum() <= 0:
+            wt = np.ones(len(g))
+        m = e @ wt / wt.sum()
+        noise.update(dict(zip(g.index, (e - m[:, None]).T)))
+        avg_nme = f'{well}_avg'.lower()
+        noise[avg_nme] = m
+        sd_ratio.append([m.std() / avg.loc[avg_nme, 'standard_deviation'],
+                         np.sqrt(((e - m[:, None]).var(0)).mean() / (g['standard_deviation']**2).mean())])
+        reading[well] = pd.DataFrame(e.T, index=dates).groupby(level=0).first()
+        head[well] = (g['obsval'] + avg.loc[avg_nme, 'obsval']).set_axis(dates).groupby(level=0).first()
+    sd_ratio = np.array(sd_ratio)
+    print(f'Head noise realized / 05_B sd: AVG {np.nanmin(sd_ratio[:, 0]):.2f}-{np.nanmax(sd_ratio[:, 0]):.2f}, '
+          f'DIFF {np.nanmin(sd_ratio[:, 1]):.2f}-{np.nanmax(sd_ratio[:, 1]):.2f} (by well)')
+    for top, v in vd.groupby('wellid'):
+        bot = f'{top}_2'
+        dates = pd.to_datetime(v['date']).to_numpy()
+        if not np.allclose(head[top].loc[dates] - head[bot].loc[dates], v['obsval'], atol=1e-3):
+            raise ValueError(f'VDIFF pairing check failed for {top}/{bot}')
+        e = reading[top].loc[dates].to_numpy() - reading[bot].loc[dates].to_numpy()
+        noise.update(dict(zip(v.index, e)))
+    return pd.DataFrame(noise)
 
 #----------------------------------------------------------------------------------------------------------------------#
 # Read in necessary model files, setup spatial reference
@@ -384,6 +507,19 @@ pp_pars['Z'] = get_model_zeds_at_locs(mg, pp_pars)
 prior_par = pd.read_csv(prior_file, index_col='parnme')
 prior_par.index = prior_par.index.str.lower()
 
+# Scale ladder prior (ln S_FF + four ln gaps) from the bootstrap scale solutions, in texture order
+with open(ladder_boot_file, 'r') as f:
+    boot = json.load(f)
+boot_scales = np.array([boot[k] for k in sorted(boot, key=int)]).T
+ladder_mean, ladder_cov = tex_ladder.ladder_prior(boot_scales)
+ladder_cov = pd.DataFrame(ladder_cov, index=tex_ladder.ladder_names, columns=tex_ladder.ladder_names)
+for nm, c, sd in zip(tex_ladder.ladder_names, ladder_mean, np.sqrt(np.diag(ladder_cov))):
+    prior_par.loc[nm, ['pargp', 'center', 'transform', 'sd', 'hard_lo', 'hard_hi', 'scale', 'offset', 'source']] = \
+        ['ladder', c, 'none', sd, np.nan, np.nan, 1.0, 0.0, 'Bootstrap of Scantlebury et al. (2026) ER-texture scales']
+
+# Texture shapes (fixed) for the order check
+tex_shapes = pd.read_table(tex_dist_file, sep=r'\s+', skiprows=1).set_index('Texture').loc[tex_ladder.texs, 'Shape'].values
+
 #----------------------------------------------------------------------------------------------------------------------#
 # File Management
 #----------------------------------------------------------------------------------------------------------------------#
@@ -408,7 +544,8 @@ shutil.copy2(paths.DERIVED_DIR / 'head_obs_master.csv', fmdir / 'MODFLOW')
 shutil.copytree(exe_dir, fmdir / 'Bin')
 
 # Latest python scripts
-fm_scripts = ['GAGE2VOL.py', 'HOBPOSTPROC.py', 'LOGSTRSIM.py', 'RES2PAR_preproc.py', 'STREAM_ADJUSTER.py']
+fm_scripts = ['GAGE2VOL.py', 'HOBPOSTPROC.py', 'LOGSTRSIM.py', 'RES2PAR_preproc.py', 'STREAM_ADJUSTER.py',
+              'tex_ladder.py']
 for f in fm_scripts:
     shutil.copy2(scpt_dir/ f, fmdir / 'Bin')
 
@@ -457,6 +594,8 @@ for f in ins_files:
 #        out_files.append('SVIHM/MODFLOW/' + out_file + '.out')
     if out_file=='head_obs_reader':
         out_files.append('SVIHM/MODFLOW/' + 'head_obs_for_pest.out')
+    elif out_file=='tex_order.out':
+        out_files.append('SVIHM/preproc/' + out_file)
     else:
         out_files.append('SVIHM/MODFLOW/' + out_file + '.out')
 
@@ -489,6 +628,14 @@ obs.loc[obs.index.str.contains('nse|kge|rmse'), 'weight'] = 0.0
 obs.loc[obs.index.str.contains('nse|kge|rmse'), 'standard_deviation'] = 0.0
 obs.loc[obs.index.str.contains('nse|kge|rmse'), 'obgnme'] = 'metrics'
 obs_updated += obs.index.str.contains('nse|kge|rmse').sum()
+
+# ER-texture probability order: inequality obs, realizations that violate it are dropped (no phi pressure while met)
+# drop_violations respects weights, so it needs a non-zero weight
+obs['drop_violations'] = False
+obs.loc['tex_dip', ['obsval', 'weight', 'obgnme', 'standard_deviation', 'drop_violations']] = \
+    [tex_ladder.DIP_MAX, 1.0, 'l_tex_order', 0.0, True]
+obs.loc['tex_rev_aem', ['obsval', 'weight', 'obgnme', 'standard_deviation']] = [0.0, 0.0, 'tex_diag', 0.0]
+obs_updated += 2
 
 print(f'Updated {obs_updated} / {obs.shape[0]} obs in PST, and {sfr_obs.shape[0]+hob_obs.shape[0]} in CSVs')
 
@@ -548,14 +695,14 @@ print(t2p_par2par_frompar(par))
 #----------------------------------------------------------------------------------------------------------------------#
 
 # build full cov with PP blocks
-full_cov = build_full_cov_with_pp_blocks(pst, pp_pars, prior_sd)
+full_cov = build_full_cov_with_pp_blocks(pst, pp_pars, prior_sd, ladder_cov=ladder_cov)
 full_cov.to_coo("parcov.jcb")
 pst.pestpp_options["parcov"] = "parcov.jcb"
 
 # full_cov.to_ascii(work_dir / "parcov.cov")
 # pst.pestpp_options["parcov"] = "parcov.cov"
 
-prior_pe = draw_prior(pst, full_cov, ensemble_size, filt_kvc, filt_anff_max)
+prior_pe = draw_prior(pst, full_cov, ensemble_size, filt_kvc, filt_anff_max, tex_shapes)
 
 prior_pe.to_csv("prior_pe.csv")
 pst.pestpp_options["ies_parameter_ensemble"] = "prior_pe.csv"
@@ -563,6 +710,27 @@ pst.pestpp_options["ies_num_reals"] = ensemble_size
 
 # If you get curious
 good_tex_pars, _ = t2p_par2par_chain(prior_pe)
+
+#----------------------------------------------------------------------------------------------------------------------#
+# Observation Noise Ensemble
+#----------------------------------------------------------------------------------------------------------------------#
+
+# Correlated noise on non-zero weight streamflow targets and head readings; everything else (inequality, metrics,
+# zero weight) stays at obsval
+noise = pd.concat([streamflow_obs_noise(sfr_obs, ensemble_size),
+                   head_obs_noise(hob_obs, ensemble_size)], axis=1)
+noise.index = prior_pe.index
+nz = obs.loc[(obs['weight'] > 0) & (obs['standard_deviation'] > 0)].index
+print(f'Obs noise: {noise.shape[1]} obs, {len(nz.difference(noise.columns))} non-zero weight obs without noise')
+print(nz.difference(noise.columns).tolist()[:20])
+ratio = noise.std() / obs.loc[noise.columns, 'standard_deviation']
+print(ratio.groupby(obs.loc[noise.columns, 'obgnme']).describe()[['mean', 'min', 'max']])
+
+oe = pd.DataFrame(np.tile(obs['obsval'].to_numpy(dtype=float), (ensemble_size, 1)), index=prior_pe.index,
+                  columns=obs.index)
+oe.loc[:, noise.columns] += noise
+pyemu.ObservationEnsemble(pst=pst, df=oe).to_dense('obs_en.bin')
+pst.pestpp_options["ies_observation_ensemble"] = "obs_en.bin"
 
 #----------------------------------------------------------------------------------------------------------------------#
 # LET'S GOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO

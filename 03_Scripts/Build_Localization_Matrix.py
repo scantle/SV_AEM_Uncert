@@ -139,6 +139,9 @@ for df in [hob_obs, sfr_obs]:
 obs.loc[obs.index.str.contains('nse|kge|rmse'), 'obsval'] = 1.0
 obs.loc[obs.index.str.contains('nse|kge|rmse'), 'weight'] = 0.0
 
+# Texture order diagnostics (tex_dip stays weighted, see 06)
+obs.loc[obs.index.intersection(['tex_rev_aem']), 'weight'] = 0.0
+
 #----------------------------------------------------------------------------------------------------------------------#
 # Separate out Quartz Valley using a shapefile
 #----------------------------------------------------------------------------------------------------------------------#
@@ -333,6 +336,13 @@ glo_obs_as = [obs for obs in glo_obs if obs.startswith('as_')]
 asoi  = pyemu.Matrix.find_rowcol_indices(glo_obs_as,  M.row_names, M.col_names, axis=0)
 naspi = pyemu.Matrix.find_rowcol_indices(glo_par_nonas, M.row_names, M.col_names, axis=1)
 M.x[np.ix_(asoi, naspi)] = 0.0  # by obs, parameters downstream
+
+#-- Texture order check depends only on the global scale ladder
+if 'tex_dip' in M.row_names:
+    toi = pyemu.Matrix.find_rowcol_indices(['tex_dip'], M.row_names, M.col_names, axis=0)
+    lpi = pyemu.Matrix.find_rowcol_indices([p for p in all_pars if p.startswith('ladder_')], M.row_names, M.col_names, axis=1)
+    M.x[toi, :] = 0.0
+    M.x[np.ix_(toi, lpi)] = 1.0
 
 # Write SPARSE binary localizer (rectangular)
 out_path = pest_dir / "localizer.jcb"

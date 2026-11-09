@@ -8,6 +8,7 @@ import flopy as fp
 import pyemu
 from pathlib import Path
 import project_paths as paths
+import tex_ladder
 from tqdm import tqdm
 from shapely.geometry import Point, Polygon
 from shapely.ops import unary_union
@@ -44,9 +45,7 @@ boundary_threshold = 250.0  # meters
 # Include AEM/Lith KVME pilot points?
 kvme_pp_flag = False
 
-# Textures (for scale_pp parameters)
-texs = ['Fine', 'Mixed_Fine', 'Sand', 'Mixed_Coarse', 'Very_Coarse']
-tex_short = ['1FF', '2MF', '3SC', '3MC', '4VC']
+#  ER-texture scales: global ladder (scale_ladder.dat.tpl, hand-made) + one shift field (ln units) on the scale PPs
 
 # Variograms (one GeoStruct per PP-type)
 scale_gs = pyemu.geostats.GeoStruct(variograms=[
@@ -66,10 +65,10 @@ aem_nug_gs = pyemu.geostats.GeoStruct(variograms=[
 PPSETS = {
     "scale_pp": {
         "shp": shp_dir / 'scale_pp.shp',
-        "targets": texs,                         # one param per texture (re-uses same factors)
+        "targets": ['scale_shift'],
         "gs": scale_gs,
-        "tpl_pattern": 'scale_pp_{tex}_L{lay}.dat.tpl', # template per texture
-        "dat_pattern": 'scale_pp_{tex}_L{lay}.dat',     # PEST will write this from tpl
+        "tpl_pattern": 'scale_pp_shift_L{lay}.dat.tpl',
+        "dat_pattern": 'scale_pp_shift_L{lay}.dat',     # PEST will write this from tpl
         "maxpts": 16
     },
     "kv_mult_pp": {
@@ -180,27 +179,22 @@ def prep_pp_locations(shp_path, base_tag, allow_layer_dup=True):
     g["zone"] = 0
     return g
 
-def assign_parnmes(ppl: pd.DataFrame, *, tag: str, layer_idx: int, tex: str | None = None):
+def assign_parnmes(ppl: pd.DataFrame, *, tag: str, layer_idx: int):
     """Return a copy of ppl with 'parnme' and 'pargp' columns added.
     - parnme must match exactly what goes inside `$ parnme $` in the TPL
     - pargp is a convenient group label you can later use in the PEST control
     """
     out = ppl.copy()
-    # 0-based layer index is used in your current parnme pattern (l{kk})
-    if tag == "scale_pp":
-        assert tex is not None, "Texture must be provided for scale_pp"
-        out["parnme"] = [f"scale_{tex}_l{layer_idx}_{i+1}" for i in range(len(out))]
-        # human-friendly group label (use 1-based for readability if you like)
-        out["pargp"]   = f"scale_{tex}_L{layer_idx+1}"
-    else:
-        # the single target/keyword for this pp set becomes the base
-        base = {
-            "lth_var_pp": "lth_var",
-            "aem_var_pp": "aem_var",
-            "kv_mult_pp": "kv_mult",
-        }[tag]
-        out["parnme"] = [f"{base}_l{layer_idx}_{i+1}" for i in range(len(out))]
-        out["pargp"]   = f"{base}"
+    # the single target/keyword for this pp set becomes the base
+    # 0-based layer index is used in the parnme pattern (l{kk})
+    base = {
+        "scale_pp": "scale_shift",
+        "lth_var_pp": "lth_var",
+        "aem_var_pp": "aem_var",
+        "kv_mult_pp": "kv_mult",
+    }[tag]
+    out["parnme"] = [f"{base}_l{layer_idx}_{i+1}" for i in range(len(out))]
+    out["pargp"]   = f"{base}"
     return out
 
 
@@ -249,11 +243,25 @@ if kvme_pp_flag:
     )
 
 # ----------------------------------------------------------------------------------------------------------------------
-# Read texture initial scales (only to seed initial PP values for 'scale_pp')
+# Remove old per-texture scale multiplier files (06 picks up every TPL and init CSV it finds)
+# ----------------------------------------------------------------------------------------------------------------------
+for f in list(out_dir.glob('scale_pp_*_L*.dat.tpl')) + list(paths.PP_INIT_DIR.glob('init_scale_pp_*.csv')):
+    print(f"[cleanup] removing {f}")
+    f.unlink()
+
+# ----------------------------------------------------------------------------------------------------------------------
+# Ladder starting values (published scales), for standalone forward runs
 # ----------------------------------------------------------------------------------------------------------------------
 tex_file = data_dir / 'lognorm_dist_clustered.par'
-tex_df = pd.read_table(tex_file, sep=r'\s+', skiprows=1)
-tex_scale_init = dict(zip(tex_df.Texture, tex_df.Scale))
+tex_df = pd.read_table(tex_file, sep=r'\s+', skiprows=1).set_index('Texture')
+theta0 = tex_ladder.ladder_theta_from_scales(tex_df.loc[tex_ladder.texs, 'Scale'].values)
+with open(preproc_dir / 'scale_ladder.dat', 'w') as f:
+    for nm, v in zip(tex_ladder.ladder_names, theta0):
+        f.write(f"{nm:15}{v:20.10e}\n")
+
+# Texture order check written by RES2PAR_preproc.py (max dip in E[texture], AEM share in reversed zones)
+with open(out_dir / 'tex_order.out.ins', 'w') as f:
+    f.write("pif ~\nl1 !tex_dip!\nl1 !tex_rev_aem!\n")
 
 # ----------------------------------------------------------------------------------------------------------------------
 # Build PP sets (locations, names, templates, and per-layer factor files)
@@ -299,22 +307,14 @@ for tag, cfg in tqdm(PPSETS.items(), 'PP Set', total=len(PPSETS.keys())):
         if ppl.empty:
             continue
 
-        if tag == "scale_pp":
-            # one template per texture per layer
-            for i, tex in enumerate(cfg["targets"]):
-                tpl_path = out_dir / cfg['tpl_pattern'].format(lay=k + 1, tex=tex)
-                ppl_named = assign_parnmes(ppl, tag=tag, layer_idx=k, tex=tex_short[i])
-                write_pp_tpl(ppl_named, tpl_path)
-                print(f"[tpl] wrote {tpl_path}")
-        else:
-            tpl_path = out_dir / cfg['tpl_pattern'].format(lay=k + 1)
-            ppl_named = assign_parnmes(ppl, tag=tag, layer_idx=k)
-            write_pp_tpl(ppl_named, tpl_path)
-            print(f"[tpl] wrote {tpl_path}")
+        tpl_path = out_dir / cfg['tpl_pattern'].format(lay=k + 1)
+        ppl_named = assign_parnmes(ppl, tag=tag, layer_idx=k)
+        write_pp_tpl(ppl_named, tpl_path)
+        print(f"[tpl] wrote {tpl_path}")
 
     # --- Build/reuse factor files per layer ---
     for k in range(layers):
-        fac_file = preproc_dir / f"{tag}_L{k+1}.fac"  # reused across all textures if tag == scale_pp
+        fac_file = preproc_dir / f"{tag}_L{k+1}.fac"
         ppL = pp_locs[pp_locs["Layer"] == k][["name","zone","X","Y"]].copy()
         if ppL.empty:
             print(f"[factors] No PPs for {tag} layer {k+1} -> skip")
@@ -381,33 +381,27 @@ for tag, cfg in tqdm(PPSETS.items(), 'PP Set', total=len(PPSETS.keys())):
         ]
     pp_locs["name"] = pp_locs["name"].str.lower()
 
-    if tag == "scale_pp":
-        rows = []
-        for k in range(layers):
-            ppl = pp_locs[pp_locs["Layer"] == k].copy()
-            if ppl.empty:
-                continue
-            for i, tex in enumerate(cfg["targets"]):
-                ppl_named = assign_parnmes(ppl, tag=tag, layer_idx=k, tex=tex_short[i])
-                out = ppl_named.copy()
-                out["parval1"] = 1.0 if i == 0 else tex_scale_init[tex] / tex_scale_init[texs[i-1]]
-                rows.append(out[["name","parnme","pargp","X","Y","Layer","parval1"]])
-        pd.concat(rows, ignore_index=True).to_csv(init_dir / f"init_{tag}_all_textures.csv", index=False)
+    rows = []
+    for k in range(layers):
+        ppl = pp_locs[pp_locs["Layer"] == k].copy()
+        if ppl.empty:
+            continue
+        ppl_named = assign_parnmes(ppl, tag=tag, layer_idx=k)
+        rows.append(ppl_named)
 
-    else:
-        rows = []
-        for k in range(layers):
-            ppl = pp_locs[pp_locs["Layer"] == k].copy()
-            if ppl.empty:
-                continue
-            ppl_named = assign_parnmes(ppl, tag=tag, layer_idx=k)
-            rows.append(ppl_named)
-        out = pd.concat(rows, ignore_index=True)
-        out["parval1"] = 0.0
-        par = cfg["targets"][0]
-        out[["name","parnme","pargp","X","Y","Layer","parval1"]].to_csv(
-            init_dir / f"init_{tag}_{par}.csv", index=False
-        )
+        # Starting-value PP file in the model preproc folder, for standalone forward runs
+        dat = ppl_named.copy()
+        dat["zone"] = dat.get("zone", 0)
+        with open(preproc_dir / cfg['dat_pattern'].format(lay=k + 1), "w") as f:
+            for _, r in dat.iterrows():
+                f.write(f"{r['name']} {int(r['zone'])} {r['X']:.3f} {r['Y']:.3f} {0.0:.10e}\n")
+
+    out = pd.concat(rows, ignore_index=True)
+    out["parval1"] = 0.0
+    par = cfg["targets"][0]
+    out[["name","parnme","pargp","X","Y","Layer","parval1"]].to_csv(
+        init_dir / f"init_{tag}_{par}.csv", index=False
+    )
 
 # ----------------------------------------------------------------------------------------------------------------------
 # Plot PP types by layer  (publication-ready)

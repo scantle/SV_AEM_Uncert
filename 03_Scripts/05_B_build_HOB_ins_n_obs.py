@@ -216,10 +216,33 @@ def calculate_hob_weights(hobs_df, wt_dict, bas, out_dir=None, by_well=False, de
 
 #----------------------------------------------------------------------------------------------------------------------#
 
+def head_noise_sds(dates, w, offset_sd, reading_sd, noise_L):
+    """
+    Noise sd of a well's weighted mean and of each reading's deviation from it, for reading error =
+    offset (sd offset_sd, constant per well) + short-term error (sd reading_sd, correlation exp(-|dt|/noise_L)).
+    With R the correlation matrix, S = sum w, q = w'Rw / S^2:
+      mean sd = sqrt(offset_sd^2 + reading_sd^2 q),  deviation sd_i = reading_sd sqrt(1 - 2 (Rw)_i / S + q)
+    """
+    w = np.asarray(w, dtype=float)
+    if w.sum() <= 0:
+        w = np.ones(len(w))
+    t = pd.to_datetime(pd.Series(dates)).to_numpy().astype('datetime64[D]').astype(float)
+    R = np.exp(-np.abs(t[:, None] - t[None, :]) / noise_L)
+    Rw = R @ w
+    q = w @ Rw / w.sum()**2
+    sd_mean = np.sqrt(offset_sd**2 + reading_sd**2 * q)
+    sd_dev = reading_sd * np.sqrt(np.maximum(1 - 2 * Rw / w.sum() + q, 0.0))
+    return sd_mean, sd_dev
+
+#----------------------------------------------------------------------------------------------------------------------#
+
 def build_head_obs_sets_weighted(
     df: pd.DataFrame,
     vertical_pairs: List[Tuple[str, str]],
-    base_sigma: float = 1.0,
+    offset_sd: float = 0.3,
+    reading_sd: float = 0.3,
+    nest_sd: float = 0.1,
+    noise_L: float = 40.7,
     max_avg_weight: float = 1.0,
     value_col: str = "obsval",
     time_key: str = "date",
@@ -229,8 +252,9 @@ def build_head_obs_sets_weighted(
     Build AVG_HEAD, DIFF_HEAD, VDIFF using only rows with wt>0 when computing per-well means.
     For wells with NO wt>0 rows, we still include them:
       - mean fallback = unweighted mean over all rows for that well
-      - sigma_mean fallback = base_sigma / sqrt(n_all)
       - AVG_HEAD weight = 0 (since sumw == 0)
+    Std devs follow the obs noise model in 06 (per-well offset + short-term correlated reading error), see
+    head_noise_sds; nested (VDIFF) pairs share their error apart from nest_sd.
     Output columns: ['obsnme','group','obval','stdev','weight','wellid','date']
     """
     req = {"obsnme", "wellid", value_col, weight_col}
@@ -238,7 +262,7 @@ def build_head_obs_sets_weighted(
     if missing:
         raise ValueError(f"build_head_obs_sets_weighted: missing {missing}")
 
-    d = df.copy()
+    d = df.copy().reset_index(drop=True)
 
     # ---------- positive-weight subset ----------
     pos = d[d[weight_col] > 0].copy()
@@ -252,24 +276,10 @@ def build_head_obs_sets_weighted(
                .rename("well_wmean")
                .reset_index()
         )
-
-        def _sigma_mean(g):
-            w = g[weight_col].to_numpy()
-            sw = w.sum()
-            if sw <= 0:
-                return np.nan
-            return base_sigma * np.sqrt((w ** 2).sum()) / sw
-
-        sigm_pos = (
-            pos.groupby("wellid")
-               .apply(_sigma_mean)
-               .rename("sigma_mean")
-               .reset_index()
-        )
-        meta_pos = wmean_pos.merge(sigm_pos, on="wellid", how="left")
+        meta_pos = wmean_pos
     else:
         # no positive-weight obs anywhere
-        meta_pos = pd.DataFrame(columns=["wellid", "well_wmean", "sigma_mean"])
+        meta_pos = pd.DataFrame(columns=["wellid", "well_wmean"])
 
     # ---------- fallback stats for wells with no wt>0 ----------
     # unweighted mean over all rows
@@ -278,33 +288,30 @@ def build_head_obs_sets_weighted(
          .mean()
          .rename(columns={value_col: "fallback_mean"})
     )
-    # n_all for fallback sigma of the mean
-    n_all = (
-        d.groupby("wellid", as_index=False)[value_col]
-         .size()
-         .rename(columns={"size": "n_all"})
-    )
-
     # ensure every well appears, take weighted stats if available; else fallback
     all_wells = d[["wellid"]].drop_duplicates()
     meta_complete = (all_wells
         .merge(meta_pos, on="wellid", how="left")
         .merge(fallback_mean, on="wellid", how="left")
-        .merge(n_all, on="wellid", how="left")
     )
 
     # Fill mean with fallback where missing
     meta_complete["well_wmean"] = meta_complete["well_wmean"].fillna(meta_complete["fallback_mean"])
 
-    # Fallback sigma_mean = base_sigma / sqrt(n_all)
-    sigma_fallback = base_sigma / np.sqrt(np.maximum(meta_complete["n_all"].fillna(0).to_numpy(), 1))
-    meta_complete["sigma_mean"] = meta_complete["sigma_mean"].fillna(pd.Series(sigma_fallback))
-
     # Drop helpers we no longer need
     meta_complete = meta_complete.drop(columns=["fallback_mean"])
 
-    # Merge means/sigmas back to the long table
-    d = d.merge(meta_complete[["wellid", "well_wmean", "sigma_mean"]], on="wellid", how="left", validate="many_to_one")
+    # Noise std devs of the well mean and of each reading's deviation from it (wt <= 0 rows don't enter the mean)
+    d["stdev_dm"] = np.nan
+    sigma_mean = {}
+    for well, g in d.groupby("wellid"):
+        sd_mean, sd_dev = head_noise_sds(g[time_key], g[weight_col].clip(lower=0), offset_sd, reading_sd, noise_L)
+        sigma_mean[well] = sd_mean
+        d.loc[g.index, "stdev_dm"] = sd_dev
+    meta_complete["sigma_mean"] = meta_complete["wellid"].map(sigma_mean)
+
+    # Merge means back to the long table
+    d = d.merge(meta_complete[["wellid", "well_wmean"]], on="wellid", how="left", validate="many_to_one")
 
     # ---------- AVG_HEAD ----------
     sumw = d.groupby("wellid", as_index=False)[weight_col].sum().rename(columns={weight_col: "sumw"})
@@ -324,8 +331,6 @@ def build_head_obs_sets_weighted(
     d["diff_from_mean"] = d[value_col] - d["well_wmean"]
     d["obsnme_dm"]      = d["obsnme"].astype(str) + "_DM"
     d["group_dm"]       = "hds_diff"
-    # DIFF stdev: sqrt(base_sigma^2 + sigma_mean^2)
-    d["stdev_dm"] = np.sqrt(base_sigma**2 + np.where(np.isnan(d["sigma_mean"]), 0.0, d["sigma_mean"]**2))
 
     diff_rows = d.rename(columns={
         "obsnme_dm": "obsnme",
@@ -351,7 +356,7 @@ def build_head_obs_sets_weighted(
             continue
         m["obval"]  = m["top_val"] - m["bot_val"]
         m["weight"] = m[["wt_top", "wt_bot"]].min(axis=1)  # may be zero; fine
-        m["stdev"]  = base_sigma * np.sqrt(2.0)
+        m["stdev"]  = nest_sd  # casings share offset and short-term error
         m = m.reset_index(drop=True)
         m["obsnme"] = [f"{top_well}_VD.{i}" for i in m.index]
         m["group"]  = "hds_vdiff"
@@ -467,7 +472,10 @@ hobs_w = calculate_hob_weights(
 obs_master = build_head_obs_sets_weighted(
     hobs_w,
     vertical_pairs=vertical_well_pairs,
-    base_sigma=1.0,          # assumed single-measurement std dev (m)
+    offset_sd=0.3,           # per-well reference point / screen error (m), must match 06
+    reading_sd=0.3,          # short-term reading error (m), must match 06
+    nest_sd=0.1,             # nested piezometer casing difference error (m), must match 06
+    noise_L=40.7,            # short-term error correlation length (days), must match 06
     max_avg_weight=2.0,
     value_col="obsval",
     time_key="date",

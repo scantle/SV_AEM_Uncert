@@ -10,6 +10,7 @@ from pathlib import Path
 from scipy.stats import lognorm
 import t2py
 import re
+import tex_ladder
 
 #----------------------------------------------------------------------------------------------------------------------#
 # Settings
@@ -18,6 +19,7 @@ import re
 # Input Files
 in_dir = Path('.')
 tex_dist_file = in_dir / 'lognorm_dist_clustered.par'
+ladder_file = in_dir / 'scale_ladder.dat'
 out_dir = Path('.')
 
 # temp
@@ -42,10 +44,9 @@ texs = ['Fine', 'Mixed_Fine','Sand', 'Mixed_Coarse', 'Very_Coarse']
 # Per-PP-set config (locations are fixed here; values come from PEST later)
 PPSETS = {
     "scale_pp": {
-        "targets": texs,                             # one param per texture (re-uses same factors)
-        "dat_pattern": 'scale_pp_{tex}_L{lay}.dat',  # PEST will write this from tpl
+        "targets": ['scale_shift'],                  # one shift field (ln units) applied to all textures
+        "dat_pattern": 'scale_pp_shift_L{lay}.dat',  # PEST will write this from tpl
         "fac_pattern": 'scale_pp_L{lay}.fac',        # pre-written factor file
-        "colname": 'scale_{tex}',                    # Name it output file column
     },
     "kv_mult_pp": {
         "targets": ['kv_mult'],
@@ -278,6 +279,12 @@ nlay = gwf.dis.nlay
 # Read in texture distribution priors
 tex_dists_df = pd.read_table(tex_dist_file, sep='\\s+', skiprows=1)
 tex_dists = tex_dists_df.set_index("Texture")[["Shape","Location","Scale"]].T.to_dict("list")
+shapes = np.array([tex_dists[tex][0] for tex in texs])
+
+# Global ER-texture scale ladder (ln S_FF + four ln gaps, soft floor keeps texture order)
+theta = pd.read_table(ladder_file, sep='\\s+', header=None, index_col=0).loc[tex_ladder.ladder_names, 1].values
+ln_scales = tex_ladder.ladder_lnscales(theta)
+print('Global texture scales (ohm-m):', dict(zip(texs, np.exp(ln_scales).round(2))))
 
 # Read in lithology logs
 litho = pd.read_csv(in_dir / 'lithologs.csv')
@@ -306,14 +313,7 @@ for tag, cfg in tqdm(PPSETS.items(), 'PP Set', total=len(PPSETS.keys())):
         if tag=="lth_var_pp" or tag=="aem_var_pp":
             target_map = pd.read_csv(in_dir / cfg["target_file"].format(lay=k+1))
         for i, tar in enumerate(cfg['targets']):
-            if tag=='scale_pp':
-                default_value = 1.0
-                if i>0:
-                    default_value = tex_dists[tar][2] / tex_dists[texs[i-1]][2]
             dat_file = in_dir / cfg["dat_pattern"].format(lay=k+1, tex=tar)
-            # tpl2dat(tpl_path=pest_dir / (cfg["dat_pattern"].format(lay=k + 1, tex=tar) + '.tpl'),
-            #         default=default_value,
-            #         out_path=dat_file)
             kriged = pyemu.utils.geostats.fac2real(pp_file=str(dat_file),
                                                    factors_file=str(factor_file),
                                                    out_file=None)[0]
@@ -324,11 +324,10 @@ for tag, cfg in tqdm(PPSETS.items(), 'PP Set', total=len(PPSETS.keys())):
                 target_map['var_value'] = kriged
                 aem_df = pd.concat([aem_df, target_map])
             elif tag=='scale_pp':
-                if i<1:  # base
-                    grid_df.loc[grid_df['layer'] == k, tar + '_scale'] = kriged * tex_dists[tar][2]
-                else:    # mult
-                    prev = grid_df.loc[grid_df['layer']==k, texs[i-1] + '_scale'].values
-                    grid_df.loc[grid_df['layer']==k, tar + '_scale'] = kriged * prev
+                # same shift for all textures, so order and spacing are kept
+                grid_df.loc[grid_df['layer'] == k, 'scale_shift'] = kriged
+                for t, tex in enumerate(texs):
+                    grid_df.loc[grid_df['layer'] == k, tex + '_scale'] = np.exp(ln_scales[t] + kriged)
             elif tag=='kv_mult_pp':
                 grid_df.loc[grid_df['layer'] == k, 'kv_mult'] = kriged
 
@@ -429,3 +428,23 @@ log.add_wells_by_df(df=resdf,
                     depth_col='BOT_DEPTH_m', depth_top_col='TOP_DEPTH_m')
 log.write_file(out_dir / 'res_log.csv', sep=',')
 print('Wrote Texture Distribution file: res_log.csv')
+
+#----------------------------------------------------------------------------------------------------------------------#
+# Texture Order Check
+#----------------------------------------------------------------------------------------------------------------------#
+
+# Max dip in E[texture index] as ER increases (global ladder only - the shift just slides it along ER)
+tex_dip = tex_ladder.order_dip(ln_scales, shapes)
+
+# Share of AEM intervals sitting in a reversed zone (dip > DIP_MAX), using each interval's local shift
+rho_grid = np.exp(np.linspace(np.log(1.0), np.log(1e5), 5000))
+deficit = tex_ladder.order_deficit(rho_grid, ln_scales, shapes)
+aem_shift = grid_df['scale_shift'].reindex(node_from_lrc_cols(aem, gwf)).values
+deficit_aem = np.interp(aem['logrho'].values - aem_shift, np.log(rho_grid), deficit)
+tex_rev_aem = (deficit_aem > tex_ladder.DIP_MAX).mean()
+
+with open(out_dir / 'tex_order.out', 'w') as f:
+    f.write(f"{tex_dip:20.10e}\n{tex_rev_aem:20.10e}\n")
+print(f'Texture order check: max dip {tex_dip:.3f}, AEM share in reversed zones {tex_rev_aem:.3f}')
+if tex_dip > tex_ladder.DIP_MAX:
+    print(f'WARNING: texture probability order reversed (dip {tex_dip:.3f} > {tex_ladder.DIP_MAX})')

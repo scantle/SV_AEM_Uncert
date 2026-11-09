@@ -35,10 +35,10 @@ cd MODFLOW
 call ..\Bin\MODFLOW-NWT.exe SVIHM.nam
 
 :: Run python post processors
-"%IES_PYTHON%" ..\Bin\LOGSTRSIM.py Streamflow_FJ_SVIHM.dat MidptFlow --obs-csv FJ_log.csv
-"%IES_PYTHON%" ..\Bin\LOGSTRSIM.py Streamflow_AS_SVIHM.dat MidptFlow --obs-csv AS_log.csv
-"%IES_PYTHON%" ..\Bin\LOGSTRSIM.py Streamflow_BY_SVIHM.dat MidptFlow --obs-csv BY_log.csv
-"%IES_PYTHON%" ..\Bin\LOGSTRSIM.py Streamflow_SCK_SVIHM.dat MidptFlow --obs-csv SCK_log.csv
+"%IES_PYTHON%" ..\Bin\LOGSTRSIM.py Streamflow_FJ_SVIHM.dat MidptFlow --obs-csv FJ_log.csv --blocks FJ_log7d.csv
+"%IES_PYTHON%" ..\Bin\LOGSTRSIM.py Streamflow_AS_SVIHM.dat MidptFlow --obs-csv AS_log.csv --blocks AS_log7d.csv
+"%IES_PYTHON%" ..\Bin\LOGSTRSIM.py Streamflow_BY_SVIHM.dat MidptFlow --obs-csv BY_log.csv --blocks BY_log7d.csv
+"%IES_PYTHON%" ..\Bin\LOGSTRSIM.py Streamflow_SCK_SVIHM.dat MidptFlow --obs-csv SCK_log.csv --blocks SCK_log7d.csv
 "%IES_PYTHON%" ..\Bin\GAGE2VOL.py Streamflow_FJ_SVIHM.dat 1990-09-30 5
 "%IES_PYTHON%" ..\Bin\HOBPOSTPROC.py HobData_SVIHM.dat head_obs_master.csv
 
