@@ -11,7 +11,6 @@ import copy
 import shutil
 import subprocess
 from concurrent.futures import ThreadPoolExecutor
-import t2py
 
 # -------------------------------------------------------------------------------------------------------------------- #
 # Settings
@@ -138,10 +137,8 @@ def calculate_cv_metrics(full_df, fold_df, textures):
 all_logs = pd.DataFrame()
 
 # Read in well log file, setup folds
-basecase = t2py.Dataset(classes=classes,
-                        variance_col=True,
-                        filename=t2p_log, file_sep=',')
-fold_tag = np.random.randint(0, FOLDS, size=basecase.max_id)
+basecase = pd.read_csv(t2p_log)
+fold_tag = np.random.randint(0, FOLDS, size=basecase['ID'].max())
 
 # Read in main input file as list
 t2p_in = []
@@ -200,8 +197,8 @@ for n in NN_LIST:
         nruns.append((full_dir.absolute(), t2p_inf.name))
         print(f'Wrote {full_dir / t2p_inf.name}')
 
-        basecase.write_file(filename=full_dir / t2p_log.name)
-        print(f'Wrote {full_dir / t2p_log.name}', sep=',')
+        basecase.to_csv(full_dir / t2p_log.name, index=False, float_format='%.5f')
+        print(f'Wrote {full_dir / t2p_log.name}')
 
         # Setup Folds
         for f in range(0, FOLDS):
@@ -215,11 +212,9 @@ for n in NN_LIST:
                 shutil.copy(t2p_dir / item, fold_dir / item)
 
             # Setup dataset
-            folddf = basecase.df.copy()
             loc_ids = [idx for idx, tag in enumerate(fold_tag) if tag != f]
-            folddf = folddf[folddf.ID.isin(loc_ids)]
-            foldcase = t2py.Dataset(classes, variance_col=True)
-            foldcase.add_wells_by_df(folddf, name_col='Location', fill_missing=False)
+            folddf = basecase[basecase.ID.isin(loc_ids)].copy()
+            folddf['ID'] = folddf.groupby('ID', sort=False).ngroup() + 1
 
             # Write files
             with open(fold_dir / t2p_inf.name, "w") as f:
@@ -228,7 +223,7 @@ for n in NN_LIST:
             nruns.append((fold_dir.absolute(), t2p_inf.name))
             print(f'Wrote {fold_dir / t2p_inf.name}')
 
-            foldcase.write_file(filename=fold_dir / t2p_log.name, sep=',')
+            folddf.to_csv(fold_dir / t2p_log.name, index=False, float_format='%.5f')
             print(f'Wrote {fold_dir / t2p_log.name}')
 
         # Copy in model folder

@@ -540,6 +540,10 @@ shutil.copytree(model_dir, fmdir)
 # Head obs file,
 shutil.copy2(paths.DERIVED_DIR / 'head_obs_master.csv', fmdir / 'MODFLOW')
 
+# Lithology and AEM logs written by 01_Write_Initial_Sim_Files.py
+for f in ['lithologs.csv', 'aemlogs.csv']:
+    shutil.copy2(paths.DERIVED_DIR / f, fmdir / 'preproc')
+
 # Latest EXEs
 shutil.copytree(exe_dir, fmdir / 'Bin')
 

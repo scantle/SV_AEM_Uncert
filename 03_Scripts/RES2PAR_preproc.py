@@ -8,7 +8,6 @@ import pyemu
 from tqdm import tqdm
 from pathlib import Path
 from scipy.stats import lognorm
-import t2py
 import re
 import tex_ladder
 
@@ -34,6 +33,10 @@ yoff = 4571330
 # Res2Par related settings
 max_outside_dist = 500
 tailings_issue_logs = [18416, 18424, 18223, 18528, 18339]
+
+# PLSS-located lithology logs (several wells at one section centroid): location error added as measurement variance,
+# the mean semivariogram (ln ER) between a section centroid and a random point in a 1609 m section
+plss_loc_var = 0.361
 
 # Include AEM/Lith KVME pilot points?
 kvme_pp_flag = False
@@ -380,6 +383,11 @@ else:
 # Add pp "nugget" variance
 litho['var_logrho'] = litho['RHO_I_STD']**2 + litho['var_value']
 
+# Add location variance for PLSS-located logs (logs sharing XY)
+plss = litho.groupby(['x', 'y'])['WELL_INFO_ID'].transform('nunique') > 1
+litho.loc[plss, 'var_logrho'] += plss_loc_var
+print(f'Added location variance to {litho.loc[plss, "WELL_INFO_ID"].nunique()} PLSS-located logs')
+
 # # Test conversion back to texture
 # for tex in tex_dists.keys():
 #     litho[f're_{tex}'] = np.nan
@@ -419,15 +427,33 @@ aem['var_logrho'] = aem['RHO_I_STD']**2 + aem['var_value']
 use_cols = ['WELL_INFO_ID','x','y','row','col','layer','GROUND_SURFACE_ELEVATION_m','TOP_DEPTH_m','BOT_DEPTH_m','logrho','var_logrho','data_type']
 resdf = pd.concat([litho[use_cols],aem[use_cols]])
 
-# Assemble into Texture2Par log file
-log = t2py.Dataset(classes=['logrho'], variance_col=True)
-log.add_wells_by_df(df=resdf,
-                    name_col='WELL_INFO_ID',
-                    x_col='x', y_col='y',
-                    zland_col='GROUND_SURFACE_ELEVATION_m',
-                    depth_col='BOT_DEPTH_m', depth_top_col='TOP_DEPTH_m')
-log.write_file(out_dir / 'res_log.csv', sep=',')
-print('Wrote Texture Distribution file: res_log.csv')
+# Assemble into Texture2Par (2.1) dataset file: one location per log, intervals in depth order with top & bottom
+bad_depth = resdf['TOP_DEPTH_m'] >= resdf['BOT_DEPTH_m']
+if bad_depth.any():
+    print(f'Dropping {bad_depth.sum()} intervals with top depth >= bottom depth')
+resdf = resdf.loc[~bad_depth].reset_index(drop=True)
+
+# Logs at identical XY (kriging can't take duplicate stations): shift each extra log 1 m east
+locs = resdf[['WELL_INFO_ID', 'x', 'y']].drop_duplicates()
+shift = locs.groupby(['x', 'y']).cumcount().astype(float)
+if (shift > 0).any():
+    print(f'Shifting {(shift > 0).sum()} logs that share XY with another log')
+resdf = resdf.merge(locs.assign(xshift=shift), on=['WELL_INFO_ID', 'x', 'y'], how='left')
+resdf['x'] = resdf['x'] + resdf['xshift']
+resdf['ID'] = resdf.groupby(['WELL_INFO_ID', 'x', 'y'], sort=False).ngroup() + 1
+resdf = resdf.sort_values(['ID', 'TOP_DEPTH_m'], kind='stable')
+log = pd.DataFrame({'Location': resdf['WELL_INFO_ID'],
+                    'ID': resdf['ID'],
+                    'X': resdf['x'],
+                    'Y': resdf['y'],
+                    'Zland': resdf['GROUND_SURFACE_ELEVATION_m'],
+                    'DepthTop': resdf['TOP_DEPTH_m'],
+                    'DepthBot': resdf['BOT_DEPTH_m'],
+                    'logrho': resdf['logrho'],
+                    'var_logrho': resdf['var_logrho']})
+log.insert(2, 'n', log.groupby('ID').cumcount() + 1)
+log.to_csv(out_dir / 'res_log.csv', index=False, float_format='%.5f')
+print(f'Wrote Texture Distribution file: res_log.csv ({log.ID.max()} locations, {len(log)} intervals)')
 
 #----------------------------------------------------------------------------------------------------------------------#
 # Texture Order Check

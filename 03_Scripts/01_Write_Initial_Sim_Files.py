@@ -34,7 +34,7 @@ shp_dir = paths.GIS_DIR
 plt_dir = paths.PLOT_DIR
 
 # Files
-litho_file = data_dir / 'AEM_WELL_LITHOLOGY_csv_WO2_20220710_CVHM.csv'
+litho_file = data_dir / 'AEM_WELL_LITHOLOGY_WO2_21102025.csv'  # DWR SA2 supporting data, updated 2026-01-14
 aem_sharp_file = data_dir / 'SCI_Sharp_10_West_I01_MOD_inv.xyz'
 
 # Shapefiles
@@ -54,6 +54,11 @@ min_log_length = 5  # meters
 use_model_gse = True
 svihm_buffer = 500
 tailings_issue_logs = [18416, 18424, 18223, 18528, 18339]
+well_id_offset = 2200000  # 2026 release IDs = 2022 IDs (used by the well shapefiles) + offset
+
+# Major lithology falls back to the USCS description where the 2026 release lost it (e.g. "brown clay." -> Unknown)
+# ("Organic soil" left out: it is also the default for vague entries like "Soil or Organic" over 26 m, or "alluvial")
+uscs_fallback = {'Clay': 'clay', 'Sand': 'sand', 'Gravel': 'gravel', 'Metamorphic': 'rock'}
 
 # Cluster colors
 cc = ['#df263e', '#e37e26', '#e3c128', '#6da14d', '#5289db']
@@ -137,7 +142,7 @@ def reclassify_texture(intv):
     # elif tex == 'unknown':
     #     tex = -999
     else:
-        print('UNKNOWN TEXTURE:', intv[['Texture','Primary_Texture_Modifier']])
+        print('UNKNOWN TEXTURE:', intv[['Texture','LITH_TRANSCRIPTION']].values)
     return tex
 
 #----------------------------------------------------------------------------------------------------------------------#
@@ -201,8 +206,11 @@ with open(data_dir / 'lognorm_dist_clustered.par', 'w') as f:
 
 #-- Setup lithology log with model lay, row, col
 
-# Read in logs
+# Read in logs, back to the 2022 well IDs, major lithology (USCS where it's missing)
 litho = pd.read_csv(litho_file)
+litho['WELL_INFO_ID'] = litho['WELL_INFO_ID'] - well_id_offset
+litho['Texture'] = litho['LITH_MAJOR1'].where(litho['LITH_MAJOR1'] != 'Unknown',
+                                              litho['USCS_DESCRIPTION'].map(uscs_fallback)).fillna('unknown').str.lower()
 
 # Read in litho_df shapefiles
 aem_hqwells_shp = gpd.read_file(aem_hqwells_file)

@@ -120,7 +120,8 @@ for f in ins_files:  # overcomplicated this for myself
 pst = pyemu.Pst.from_io_files(tpl_files=tpl_files, in_files=in_files,
                               ins_files=ins_files, out_files=out_files,
                               pst_filename='temp.pst')
-os.remove('temp.pst')  # immediate cleanup :)
+for f in glob.glob('temp.*'):  # immediate cleanup :) (pst + its csv files)
+    os.remove(f)
 
 # It would be much simpler to read in the PST file but that would create a circular dependency...
 # so alas... update the pst object with the head weights
@@ -410,10 +411,10 @@ qa_plot_obs_influence("st201_avg", M, obs_xy, pars_xy, wmin=0.01)
 qa_plot_obs_influence("scv_11_avg", M, obs_xy, pars_xy, wmin=0.01)
 
 # Stream tests
-qa_plot_obs_influence("fj_20191130", M, obs_xy, pars_xy, wmin=0.01)  # should be everything
+qa_plot_obs_influence("fj_w20191125", M, obs_xy, pars_xy, wmin=0.01)  # should be everything
 
 # Shackleford Creek
-qa_plot_obs_influence("sck_20070903", M, obs_xy, pars_xy, wmin=0.01)
+qa_plot_obs_influence("sck_w20070903", M, obs_xy, pars_xy, wmin=0.01)
 
 #----------------------------------------------------------------------------------------------------------------------#
 # QA/QC - from pars
@@ -475,7 +476,7 @@ def qa_plot_param_influence(par_name, M, obs_xy, pars_xy, wmin=1e-6, annotate_to
     if return_df:
         return df[['w']]
 
-huh = qa_plot_param_influence('SCALE_1FF_L0_4'.lower(), M, obs_xy, pars_xy, wmin=0.01, annotate_top=10, print_top=10, return_df=True)
+huh = qa_plot_param_influence('scale_shift_l0_4', M, obs_xy, pars_xy, wmin=0.01, annotate_top=10, print_top=10, return_df=True)
 huh = qa_plot_param_influence('KV_MULT_L1_91'.lower(), M, obs_xy, pars_xy, wmin=0.01, annotate_top=10, print_top=10, return_df=True)
 
 #----------------------------------------------------------------------------------------------------------------------#

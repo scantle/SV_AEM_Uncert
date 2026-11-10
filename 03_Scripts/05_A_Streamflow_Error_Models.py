@@ -1077,7 +1077,7 @@ write_ts_ins_file(by_obs, origin_date,0, pest_dir /'Streamflow_BY_SVIHM_MidptFlo
 # Crude INS metrics addition
 for stream in streams:
     with open(pest_dir / f'Streamflow_{stream}_SVIHM_MidptFlow_LOG.ins', 'a') as f:
-        f.write(f'l1 w !{stream}_NSE!\n')
+        f.write(f'@NSE@ w !{stream}_NSE!\n')  # search ahead: AS/BY obs end years before the output file does
         f.write(f'l1 w !{stream}_KGE!\n')
         f.write(f'l1 w !{stream}_RMSE!\n')
 

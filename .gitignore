@@ -215,6 +215,7 @@ cython_debug/
 02_Models/SVIHM_MF_working/preproc/aemlogs.csv
 02_Models/SVIHM_MF_working/preproc/lithologs.csv
 02_Models/SVIHM_MF_working/preproc/lognorm_dist_clustered.par
+02_Models/SVIHM_MF_working/preproc/*.dat
 02_Models/SVIHM_MF_working/SWBM/SWBM.log
 
 # Machine-specific paths
