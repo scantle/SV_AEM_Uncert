@@ -19,7 +19,7 @@ for %%F in (pixi.toml pixi.lock launch_ies.py build_manifest.json svihm_ies.pst 
 echo Checking or creating the worker environment...
 "%IES_PIXI%" install --locked -e worker --manifest-path "%~dp0pixi.toml"
 if errorlevel 1 goto failed
-"%IES_PIXI%" run --locked -e worker --manifest-path "%~dp0pixi.toml" python -c "import numpy, pandas, scipy, flopy, pyemu, t2py, tqdm, hydroeval, sklearn; print('Worker environment ready: numpy', numpy.__version__, 'pandas', pandas.__version__, 'pyemu', pyemu.__version__)"
+"%IES_PIXI%" run --locked -e worker --manifest-path "%~dp0pixi.toml" python -c "import numpy, pandas, scipy, flopy, pyemu, tqdm, hydroeval, sklearn; print('Worker environment ready: numpy', numpy.__version__, 'pandas', pandas.__version__, 'pyemu', pyemu.__version__)"
 if errorlevel 1 goto failed
 echo.
 echo Start the host computer first. Workers connect on TCP port 4004.

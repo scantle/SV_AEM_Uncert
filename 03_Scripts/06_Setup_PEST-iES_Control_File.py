@@ -733,8 +733,8 @@ print(ratio.groupby(obs.loc[noise.columns, 'obgnme']).describe()[['mean', 'min',
 oe = pd.DataFrame(np.tile(obs['obsval'].to_numpy(dtype=float), (ensemble_size, 1)), index=prior_pe.index,
                   columns=obs.index)
 oe.loc[:, noise.columns] += noise
-pyemu.ObservationEnsemble(pst=pst, df=oe).to_dense('obs_en.bin')
-pst.pestpp_options["ies_observation_ensemble"] = "obs_en.bin"
+pyemu.ObservationEnsemble(pst=pst, df=oe).to_binary('obs_en.jcb')
+pst.pestpp_options["ies_observation_ensemble"] = "obs_en.jcb"
 
 #----------------------------------------------------------------------------------------------------------------------#
 # LET'S GOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO

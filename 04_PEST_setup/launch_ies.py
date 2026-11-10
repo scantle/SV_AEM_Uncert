@@ -25,8 +25,11 @@ pestpp_exe = 'pestpp-ies.exe'
 manifest_file = 'build_manifest.json'
 default_port = 4004
 
+# PEST++ options naming files only the manager reads (not copied to workers)
+manager_only_options = ['parcov', 'ies_parameter_ensemble', 'ies_observation_ensemble', 'ies_localizer']
+
 # Imports needed by the forward run scripts
-worker_imports = 'import numpy, pandas, scipy, flopy, pyemu, t2py, tqdm, hydroeval, sklearn'
+worker_imports = 'import numpy, pandas, scipy, flopy, pyemu, tqdm, hydroeval, sklearn'
 
 #----------------------------------------------------------------------------------------------------------------------#
 # Functions
@@ -83,12 +86,19 @@ def launch(template, destination, python, count, host, hostname, port):
     print('Checking build files...')
     files = checked_files(template)
     names = (['manager'] if host else []) + [f'worker_{i:03d}' for i in range(count)]
+    manager_only = set()
+    for line in (template / pst_file).read_text().splitlines():
+        parts = line.split()
+        if len(parts) == 2 and parts[0].lower() in manager_only_options:
+            manager_only.add(parts[1])
 
     # Complete every copy before starting any process
     for name in names:
         print(f'Copying {name}')
         folder = destination / name
         for relative in files:
+            if name != 'manager' and relative in manager_only:
+                continue
             target = folder / relative
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(template / relative, target)

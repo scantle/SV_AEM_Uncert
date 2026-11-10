@@ -17,8 +17,6 @@ scikit-learn = "*"
 
 [feature.worker.pypi-dependencies]
 hydroeval = "*"
-# Not the PyPI package of the same name
-t2py = { git = "https://github.com/scantle/t2py.git", rev = "c8de2c5a46d393fe7ae098c823c9620c58a0662a" }
 
 # Workflow, analysis and plotting scripts
 [feature.analysis.dependencies]
