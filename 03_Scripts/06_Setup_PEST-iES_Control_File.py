@@ -7,6 +7,7 @@ from tqdm import tqdm
 from pathlib import Path
 import project_paths as paths
 import tex_ladder
+import PUMPRED
 import shutil
 import glob
 import json
@@ -548,10 +549,15 @@ for f in ['lithologs.csv', 'aemlogs.csv']:
 shutil.copytree(exe_dir, fmdir / 'Bin')
 
 # Latest python scripts
-fm_scripts = ['GAGE2VOL.py', 'HOBPOSTPROC.py', 'LOGSTRSIM.py', 'RES2PAR_preproc.py', 'STREAM_ADJUSTER.py',
-              'tex_ladder.py']
+fm_scripts = ['GAGE2VOL.py', 'HOBPOSTPROC.py', 'LOGSTRSIM.py', 'PUMPRED.py', 'RES2PAR_preproc.py',
+              'STREAM_ADJUSTER.py', 'tex_ladder.py']
 for f in fm_scripts:
     shutil.copy2(scpt_dir/ f, fmdir / 'Bin')
+
+# Pumping reduction INS (obs list fixed by the DIS and the SWBM ag well list)
+PUMPRED.write_ins(PUMPRED.obs_names(fmdir / 'MODFLOW' / f'{model_name}.dis',
+                                    fmdir / 'SWBM' / 'ag_well_summary.txt'),
+                  pest_dir / 'Pumping_Reduction.ins')
 
 # Remove and remake target directory, copy in files
 # (keeps .pixi so batches already launched from this folder keep their python)
@@ -640,6 +646,14 @@ obs.loc['tex_dip', ['obsval', 'weight', 'obgnme', 'standard_deviation', 'drop_vi
     [tex_ladder.DIP_MAX, 1.0, 'l_tex_order', 0.0, True]
 obs.loc['tex_rev_aem', ['obsval', 'weight', 'obgnme', 'standard_deviation']] = [0.0, 0.0, 'tex_diag', 0.0]
 obs_updated += 2
+
+# Pumping reduced by MF-NWT (fraction of requested extraction): zero weight until a threshold is set
+pmpr = obs.index[obs.index.str.startswith('pmpr_')]
+obs.loc[pmpr, ['obsval', 'weight', 'standard_deviation']] = [0.0, 0.0, 0.0]
+obs.loc[pmpr, 'obgnme'] = 'pmp_red_cell'
+obs.loc[pmpr[pmpr.str.startswith('pmpr_wy')], 'obgnme'] = 'pmp_red_wy'
+obs.loc['pmpr_total', 'obgnme'] = 'pmp_red_total'
+obs_updated += len(pmpr)
 
 print(f'Updated {obs_updated} / {obs.shape[0]} obs in PST, and {sfr_obs.shape[0]+hob_obs.shape[0]} in CSVs')
 

@@ -56,5 +56,7 @@ if errorlevel 1 exit /b 1
 if errorlevel 1 exit /b 1
 "%IES_PYTHON%" ..\Bin\HOBPOSTPROC.py HobData_SVIHM.dat head_obs_master.csv
 if errorlevel 1 exit /b 1
+"%IES_PYTHON%" ..\Bin\PUMPRED.py SVIHM.wel Reduced_Wells.dat SVIHM.dis ..\SWBM\ag_well_summary.txt --out Pumping_Reduction.out
+if errorlevel 1 exit /b 1
 
 cd ..\

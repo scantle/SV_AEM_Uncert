@@ -1,6 +1,7 @@
 import matplotlib
 matplotlib.use('TkAgg')
 import os
+import sys
 from pathlib import Path
 import project_paths as paths
 import matplotlib.pyplot as plt
@@ -16,10 +17,12 @@ from sklearn.metrics import r2_score
 #----------------------------------------------------------------------------------------------------------------------#
 
 data_dir = paths.DERIVED_DIR
-f_dir = paths.run_dir('06_wtfx')
 
-#par_file   = f_dir / "svihm_ies.2.par.csv"
-obs_file   = f_dir / "svihm_ies.3.obs.csv"
+# Optional arguments: run folder, obs ensemble file name, comma-separated well list (default: all wells)
+#   pixi run python 03_Scripts/08_Ensemble_Hydrographs.py <run_dir> svihm_ies.0.obs.csv M2,G40
+f_dir = Path(sys.argv[1]) if len(sys.argv) > 1 else paths.run_dir('06_wtfx')
+obs_file = f_dir / (sys.argv[2] if len(sys.argv) > 2 else "svihm_ies.3.obs.csv")
+well_subset = [w.strip().upper() for w in sys.argv[3].split(',')] if len(sys.argv) > 3 else None
 
 # Extract iteration number...
 iter = obs_file.name.split('.')[1]
@@ -43,6 +46,7 @@ plt.rcParams.update({
     "grid.alpha": 0.8,
     "axes.axisbelow": True,
     "figure.dpi": 300,
+    "axes.unicode_minus": False,    # Bahnschrift has no unicode minus glyph
 })
 
 #----------------------------------------------------------------------------------------------------------------------#
@@ -51,11 +55,11 @@ plt.rcParams.update({
 
 def parse_daily_date_from_obsnme(obsnme: str):
     """
-    Expect patterns like 'FJ_19901001', 'AS_20050715', etc.
+    Expect patterns like 'FJ_19901001', 'AS_20050715', or 7-day blocks 'FJ_w19901001'.
     Takes the substring after the first '_' and parses YYYYMMDD.
     """
     try:
-        date_part = obsnme.split("_", 1)[1]
+        date_part = obsnme.split("_", 1)[1].lstrip("w")
         # daily flows are stored as YYYYMMDD
         return pd.to_datetime(date_part, format="%Y%m%d")
     except Exception:
@@ -130,7 +134,7 @@ print(f"SK lNSE: {run_results.loc['base','sck_nse']} lkge: {run_results.loc['bas
 #----------------------------------------------------------------------------------------------------------------------#
 
 # Only use the "str_*" groups for now (ignore vol_* for this first pass)
-str_groups = [g for g in str_obs["obsgnme"].unique() if str(g).startswith("str_")]
+str_groups = [g for g in str_obs["obsgnme"].unique() if str(g).startswith(("str_", "str7d_"))]
 
 for g in str_groups:
     # Subset obs for this stream group
@@ -315,6 +319,8 @@ for g in vol_groups:
 # use only difference targets for time series
 diff_df = head_obs.loc[head_obs["group"] == "hds_diff"].copy()
 wells = sorted(diff_df["wellid"].dropna().unique())
+if well_subset is not None:
+    wells = [w for w in wells if str(w).upper() in well_subset]
 
 # accumulate observed vs base simulated elevations for final scatter
 scat_obs = []
@@ -525,8 +531,9 @@ r2 = r2_score(obs_all, sim_all)
 
 fig, ax = plt.subplots(figsize=(6, 6))
 
-obs_uw = np.concatenate(scat_obs_uw)
-sim_uw = np.concatenate(scat_sim_uw)
+if scat_obs_uw:
+    obs_uw = np.concatenate(scat_obs_uw)
+    sim_uw = np.concatenate(scat_sim_uw)
 # ax.scatter(obs_uw, sim_uw, s=8, facecolors="none",
 #            edgecolors="0.5", alpha=0.6, label="Zero-weight Observations")
 
