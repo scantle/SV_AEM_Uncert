@@ -415,8 +415,8 @@ if kvme_pp_flag:
 else:
     aem['var_value'] = 0.0
 
-# Add pp "nugget" variance
-aem['var_logrho'] = aem['RHO_I_STD']**2 + aem['var_value']
+# Inversion variance (RHO_I_STD is a factor, STDF) + sharp/smooth spread variance + pp "nugget" variance
+aem['var_logrho'] = np.log(aem['RHO_I_STD'])**2 + aem['RHO_I_VAR_SPREAD'] + aem['var_value']
 
 # plt.scatter(aem.loc[aem['layer']==0,'x'], aem.loc[aem['layer']==0,'y'], c=aem.loc[aem['layer']==0,'var_value'], s=8)
 # plt.gca().set_aspect('equal')

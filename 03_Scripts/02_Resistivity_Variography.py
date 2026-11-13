@@ -123,8 +123,6 @@ def dir_vario(xs, ys, zs, vals, az_deg, bin_edges, tol_deg=15, samp=30000, seed=
 aem = pd.read_csv(in_dir / 'aemlogs.csv')
 aem['data_type'] = 'aem'
 
-# Need to convert RHO_I_STD to log using delta method
-
 # Combine dataframes
 use_cols = ['x','y','z','row','col','layer','RHO_I','RHO_I_STD','data_type']
 resdf = aem.copy()

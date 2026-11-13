@@ -36,6 +36,7 @@ plt_dir = paths.PLOT_DIR
 # Files
 litho_file = data_dir / 'AEM_WELL_LITHOLOGY_WO2_21102025.csv'  # DWR SA2 supporting data, updated 2026-01-14
 aem_sharp_file = data_dir / 'SCI_Sharp_10_West_I01_MOD_inv.xyz'
+aem_smooth_file = data_dir / 'SCI_Smooth_10_West_I01_MOD_inv.xyz'  # DWR WO2 deliverables, 04_XYZ_Ascii/01_Smooth MLM
 
 # Shapefiles
 aem_hqwells_file = shp_dir / 'aem_sv_HQ_LithologyWells_UTM10N.shp'
@@ -306,6 +307,24 @@ aem_long = aem_long.loc[(aem_long['DEP_TOP'] < aem_long['DOI_CONSERVATIVE'])]
 # Drop any NA Rho values
 aem_long = aem_long.loc[~aem_long['RHO_I'].isna()]
 
+# Inversion spread variance: sharp vs smooth ln(rho), same 30-layer grid
+# Per inversion layer, var = d^2/2 (robust: 1.4826*median|d|), 3-layer running median
+# Layers with fewer than spread_min_n intervals (deepest, near DOI) take the value of the layer above
+spread_min_n = 200
+aem_smooth = read_xyz(aem_smooth_file, 26, x_col='UTMX', y_col='UTMY', delim_whitespace=True)
+sm_cols = [f'RHO_I_{k}' for k in range(1, 31)]
+sm_long = aem_smooth[['LINE_NO', 'FID'] + sm_cols].melt(['LINE_NO', 'FID'], sm_cols, 'POINT', 'RHO_SMOOTH')
+sm_long['POINT'] = sm_long['POINT'].str.replace('RHO_I_', '').astype(int)
+aem_long = aem_long.merge(sm_long, on=['LINE_NO', 'FID', 'POINT'], how='left')
+aem_long['d_lnrho'] = np.log(aem_long['RHO_I']) - np.log(aem_long['RHO_SMOOTH'])
+spread = aem_long.groupby('POINT')['d_lnrho'].agg(n='count', mad=lambda d: np.nanmedian(np.abs(d)))
+spread['var_raw'] = (1.4826 * spread['mad'])**2 / 2
+spread['var_spread'] = spread['var_raw'].where(spread['n'] >= spread_min_n).ffill()
+spread['var_spread'] = spread['var_spread'].rolling(3, center=True, min_periods=1).median()
+spread.to_csv(paths.DERIVED_DIR / 'aem_inversion_spread_var.csv')
+print(spread.round(4))
+aem_long['RHO_I_VAR_SPREAD'] = aem_long['POINT'].map(spread['var_spread'])
+
 # # Enforce log minimum thickness
 # aem_long = enforce_min_interval(aem_long, min_log_length, top_col='DEP_TOP', bot_col='DEP_BOT')
 #
@@ -323,7 +342,7 @@ aem_long['layer'] = gwf.dis.get_layer(aem_long['row'], aem_long['col'], aem_long
 aem_long = aem_long.rename({'DEP_TOP': 'TOP_DEPTH_m', 'DEP_BOT': 'BOT_DEPTH_m', 'ELEVATION':'GROUND_SURFACE_ELEVATION_m'}, axis=1)
 
 # Write out litho_df file
-out_cols = ['LINE_NO','FID','row','col','layer','x','y','z','GROUND_SURFACE_ELEVATION_m','TOP_DEPTH_m','BOT_DEPTH_m','RHO_I','RHO_I_STD']
+out_cols = ['LINE_NO','FID','row','col','layer','x','y','z','GROUND_SURFACE_ELEVATION_m','TOP_DEPTH_m','BOT_DEPTH_m','RHO_I','RHO_I_STD','RHO_I_VAR_SPREAD']
 aem_long[out_cols].to_csv(paths.DERIVED_DIR / 'aemlogs.csv', index=False)
 
 #----------------------------------------------------------------------------------------------------------------------#
